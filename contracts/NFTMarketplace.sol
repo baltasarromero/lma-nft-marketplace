@@ -4,25 +4,24 @@ pragma solidity 0.8.16;
 /** 
     @dev Import OpenZeppelin's the Ownable contract.
 */
-import '@openzeppelin/contracts/access/Ownable.sol';
+import "@openzeppelin/contracts/access/Ownable.sol";
 /**
     @dev Import OpenZeppelin's the ReentrancyGuardContract contract.
 */
-import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 /**
     @dev Import OpenZeppelin's Counters library.
 */
-import '@openzeppelin/contracts/utils/Counters.sol';
+import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
     @dev Import OpenZeppelin's ERC721 interface to interact with NFTs.
 */
-import '@openzeppelin/contracts/interfaces/IERC721.sol';
+import "@openzeppelin/contracts/interfaces/IERC721.sol";
 
 contract NFTMarketplace is Ownable, ReentrancyGuard {
     // State Variables
     struct Listing {
-        uint listingId;
         IERC721 nft;
         uint tokenId;
         address payable seller;
@@ -35,7 +34,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     struct Auction {
-        uint auctionId;
         IERC721 nft;
         uint tokenId;
         address payable seller;
@@ -56,12 +54,12 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // Listing Data
     Counters.Counter public listingsCount;
     Counters.Counter public listingsSoldCount;
-    mapping(uint => Listing) public listings;
+    mapping(bytes32 => Listing) public listings;
 
     // Auction Data
     Counters.Counter public auctionsCount;
     Counters.Counter public auctionsSoldCount;
-    mapping(uint => Auction) public auctions;
+    mapping(bytes32 => Auction) public auctions;
 
     // User funds
     mapping(address => uint) public userFunds;
@@ -101,7 +99,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     event ListingCancelled(
         uint indexed listingId,
         address indexed seller,
-        uint cancelBlock,
+        uint cancelTimestamp,
         uint timestamp
     );
 
@@ -128,7 +126,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     event AuctionCancelled(
         uint indexed auctionId,
         address indexed seller,
-        uint cancelBlock,
+        uint cancelTimestamp,
         uint timestamp
     );
 
@@ -157,62 +155,128 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     event FeeAmountUpdated(uint previousFeeAmount, uint newFeeAmount);
 
     // Modifiers
-    // Listings
-    modifier onlyAfterListingStart(uint listingId) {
+    // Listing
+    modifier onlyAfterListingStart(bytes32 listingKey) {
+        require(
+            block.timestamp >= listings[listingKey].startTimestamp,
+            "Listing hasn't started yet"
+        );
         _;
     }
 
-    modifier onlyBeforeListingEnd(uint listingId) {
+    modifier onlyBeforeListingEnd(bytes32 listingKey) {
+        require(
+            block.timestamp < listings[listingKey].endTimestamp,
+            "Listing has ended"
+        );
         _;
     }
 
-    modifier onlyListingNotCancelled(uint listingId) {
+    modifier onlyListingNotCancelled(bytes32 listingKey) {
+        require(
+            listings[listingKey].cancelled == false,
+            "Listing has been cancelled"
+        );
         _;
     }
 
-    modifier onlyNotListingSeller(uint listingId) {
+    modifier onlyNotListingSeller(bytes32 listingKey) {
+        require(
+            msg.sender != listings[listingKey].seller,
+            "Seller can't call this function"
+        );
         _;
     }
 
-    modifier onlyListingSeller(uint listingId) {
+    modifier onlyListingSeller(bytes32 listingKey) {
+        require(
+            msg.sender == listings[listingKey].seller,
+            "Only the seller can call this function"
+        );
         _;
     }
 
-    modifier onlyListingEndedOrCancelled(uint listingId) {
+    modifier onlyListingEndedOrCancelled(bytes32 listingKey) {
+        Listing memory listing = listings[listingKey];
+        require(
+            listing.sold ||
+                listing.cancelled ||
+                block.timestamp > listing.endTimestamp,
+            "Listing is still active"
+        );
         _;
     }
 
     // Auctions
-    modifier onlyAfterAuctionStart(uint auctionId) {
+    modifier onlyAfterAuctionStart(bytes32 auctionKey) {
+        require(
+            block.timestamp >= auctions[auctionKey].startTimestamp,
+            "Auction hasn't started yet"
+        );
         _;
     }
 
-    modifier onlyBeforeAuctionEnd(uint auctionId) {
+    modifier onlyBeforeAuctionEnd(bytes32 auctionKey) {
+        require(
+            block.timestamp < auctions[auctionKey].endTimestamp,
+            "Auction has ended"
+        );
         _;
     }
 
-    modifier onlyAuctionNotCancelled(uint auctionId) {
+    modifier onlyAuctionNotCancelled(bytes32 auctionKey) {
+        require(
+            auctions[auctionKey].cancelled == false,
+            "Auction has been cancelled"
+        );
         _;
     }
 
-    modifier onlyNotAuctionSeller(uint auctionId) {
+    modifier onlyNotAuctionSeller(bytes32 auctionKey) {
+        require(
+            msg.sender != auctions[auctionKey].seller,
+            "Seller can't call this function"
+        );
         _;
     }
 
-    modifier onlyAuctionSeller(uint auctionId) {
+    modifier onlyAuctionSeller(bytes32 auctionKey) {
+        require(
+            msg.sender == auctions[auctionKey].seller,
+            "Only the seller can call this function"
+        );
         _;
     }
 
-    modifier onlyAuctionEndedOrCancelled(uint auctionId) {
+    modifier onlyAuctionEndedOrCancelled(bytes32 auctionKey) {
+        require(
+            auctions[auctionKey].sold ||
+                auctions[auctionKey].cancelled ||
+                block.timestamp > auctions[auctionKey].endTimestamp,
+            "Auction is still active"
+        );
         _;
     }
 
     modifier notInAuctionOrListing(address nftAddress, uint tokenId) {
+        // If the NFT is listed the seller address will be different from Zero
+        require(
+            (listings[getKey(nftAddress, tokenId)].seller == address(0)) &&
+                (auctions[getKey(nftAddress, tokenId)].seller == address(0)),
+            "NFT is already listed"
+        );
         _;
     }
 
     // Functions
-    // TODO revisar
+    // Helpers
+    function getKey(
+        address nftAddress,
+        uint tokenId
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(nftAddress, tokenId));
+    }
+
     // Listings
     function createListing(
         IERC721 nft,
@@ -230,27 +294,27 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     function cancelListing(
-        uint listingId
+        bytes32 listingKey
     )
         external
         nonReentrant
-        onlyListingSeller(listingId)
-        onlyListingNotCancelled(listingId)
-        onlyBeforeListingEnd(listingId)
+        onlyListingSeller(listingKey)
+        onlyListingNotCancelled(listingKey)
+        onlyBeforeListingEnd(listingKey)
         returns (bool)
     {
         return false;
     }
 
     function updateListingPrice(
-        uint listingId,
+        bytes32 listingKey,
         uint newPrice
     )
         external
         nonReentrant
-        onlyListingSeller(listingId)
-        onlyListingNotCancelled(listingId)
-        onlyBeforeListingEnd(listingId)
+        onlyListingSeller(listingKey)
+        onlyListingNotCancelled(listingKey)
+        onlyBeforeListingEnd(listingKey)
         returns (bool)
     {
         return false;
@@ -261,8 +325,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         IERC721 nft,
         uint tokenId,
         uint floorPrice,
-        uint startBlock,
-        uint endBlock
+        uint startTimestamp,
+        uint endTimestamp
     )
         external
         nonReentrant
@@ -273,52 +337,52 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     function bid(
-        uint auctionId
+        bytes32 auctionKey
     )
         external
         payable
         nonReentrant
-        onlyNotAuctionSeller(auctionId)
-        onlyAuctionNotCancelled(auctionId)
-        onlyAfterAuctionStart(auctionId)
-        onlyBeforeAuctionEnd(auctionId)
+        onlyNotAuctionSeller(auctionKey)
+        onlyAuctionNotCancelled(auctionKey)
+        onlyAfterAuctionStart(auctionKey)
+        onlyBeforeAuctionEnd(auctionKey)
         returns (bool)
     {
         return false;
     }
 
     function cancelAuction(
-        uint auctionId
+        bytes32 auctionKey
     )
         external
         nonReentrant
-        onlyAuctionSeller(auctionId)
-        onlyAuctionNotCancelled(auctionId)
-        onlyBeforeAuctionEnd(auctionId)
+        onlyAuctionSeller(auctionKey)
+        onlyAuctionNotCancelled(auctionKey)
+        onlyBeforeAuctionEnd(auctionKey)
         returns (bool)
     {
         return false;
     }
 
     function endAuction(
-        uint auctionId
+        bytes32 auctionKey
     )
         external
         nonReentrant
-        onlyAuctionSeller(auctionId)
-        onlyAuctionNotCancelled(auctionId)
-        onlyBeforeAuctionEnd(auctionId)
+        onlyAuctionSeller(auctionKey)
+        onlyAuctionNotCancelled(auctionKey)
+        onlyBeforeAuctionEnd(auctionKey)
         returns (bool)
     {
         return false;
     }
 
     function withDrawBid(
-        uint auctionId
+        bytes32 auctionKey
     )
         external
         nonReentrant
-        onlyAuctionEndedOrCancelled(auctionId)
+        onlyAuctionEndedOrCancelled(auctionKey)
         returns (bool)
     {
         return true;
@@ -326,7 +390,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     // Management functions
     // Get the final price which is seller's desired price + marketPlace fees
-    function getFinalPrice(uint listingId) public view returns (uint) {
+    function getFinalPrice(bytes32 listingKey) public view returns (uint) {
         return 0;
     }
 
