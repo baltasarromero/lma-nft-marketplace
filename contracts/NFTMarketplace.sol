@@ -19,392 +19,518 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 */
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
 
-contract NFTMarketplace is Ownable, ReentrancyGuard {
-    // State Variables
-    struct Listing {
-        IERC721 nft;
-        uint tokenId;
-        address payable seller;
-        uint price;
-        bool sold;
-        address buyer;
-        uint startTimestamp;
-        uint endTimestamp;
-        bool cancelled;
-    }
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 
-    struct Auction {
-        IERC721 nft;
-        uint tokenId;
-        address payable seller;
-        uint floorPrice;
-        uint sellPrice;
-        bool sold;
-        address buyer;
-        mapping(address => uint) fundsByBidder;
-        address highestBidder;
-        uint highestBid;
-        bool cancelled;
-        bool ended;
-        uint startTimestamp;
-        uint endTimestamp;
-    }
+contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
+	// State Variables
+	struct Listing {
+		IERC721 nft;
+		uint tokenId;
+		address payable seller;
+		uint price;
+		bool sold;
+		address buyer;
+		uint startTimestamp;
+		uint endTimestamp;
+		bool cancelled;
+	}
 
-    using Counters for Counters.Counter;
-    // Listing Data
-    Counters.Counter public listingsCount;
-    Counters.Counter public listingsSoldCount;
-    mapping(bytes32 => Listing) public listings;
+	struct Auction {
+		IERC721 nft;
+		uint tokenId;
+		address payable seller;
+		uint floorPrice;
+		uint sellPrice;
+		bool sold;
+		address buyer;
+		mapping(address => uint) fundsByBidder;
+		address highestBidder;
+		uint highestBid;
+		bool cancelled;
+		bool ended;
+		uint startTimestamp;
+		uint endTimestamp;
+	}
 
-    // Auction Data
-    Counters.Counter public auctionsCount;
-    Counters.Counter public auctionsSoldCount;
-    mapping(bytes32 => Auction) public auctions;
+	using Counters for Counters.Counter;
+	// Listing Data
+	Counters.Counter public listingsCount;
+	Counters.Counter public listingsSoldCount;
+	mapping(bytes32 => Listing) public listings;
 
-    // User funds
-    mapping(address => uint) public userFunds;
+	// Auction Data
+	Counters.Counter public auctionsCount;
+	Counters.Counter public auctionsSoldCount;
+	mapping(bytes32 => Auction) public auctions;
 
-    // Fee management
-    address payable public feeAccount;
-    uint public fee;
+	// User funds
+	mapping(address => uint) public userFunds;
 
-    // Events
-    // Listings
-    event ListingCreated(
-        uint indexed listingId,
-        address indexed nftAddress,
-        uint indexed tokenId,
-        address seller,
-        uint price,
-        uint startTimestamp,
-        uint endTimestamp
-    );
+	// Fee management
+	address payable public feeAccount;
+	uint public fee;
 
-    event Purchase(
-        uint indexed listingId,
-        address indexed nftAddress,
-        address indexed seller,
-        address buyer,
-        uint price,
-        uint endTimestamp
-    );
+	// Events
+	// Listings
+	event ListingCreated(
+		uint indexed listingId,
+		address indexed nftAddress,
+		uint indexed tokenId,
+		address seller,
+		uint price,
+		uint startTimestamp,
+		uint endTimestamp
+	);
 
-    event ListingPriceUpdated(
-        uint indexed listingId,
-        uint oldPrice,
-        uint newPrice,
-        uint timestamp
-    );
+	event Purchase(
+		uint indexed listingId,
+		address indexed nftAddress,
+		address indexed seller,
+		address buyer,
+		uint price,
+		uint endTimestamp
+	);
 
-    event ListingCancelled(
-        uint indexed listingId,
-        address indexed seller,
-        uint cancelTimestamp,
-        uint timestamp
-    );
+	event ListingPriceUpdated(
+		uint indexed listingId,
+		uint oldPrice,
+		uint newPrice,
+		uint timestamp
+	);
 
-    // Auctions
-    event AuctionCreated(
-        uint indexed auctionId,
-        address indexed nftAddress,
-        uint indexed tokenId,
-        address seller,
-        uint floorPrice,
-        uint startTimestamp,
-        uint endTimestamp
-    );
+	event ListingCancelled(
+		uint indexed listingId,
+		address indexed seller,
+		uint cancelTimestamp,
+		uint timestamp
+	);
 
-    event NewHighestBid(
-        uint indexed auctionId,
-        address indexed nftAddress,
-        address indexed bidder,
-        uint bid,
-        uint previousHighestBid,
-        uint timestamp
-    );
+	// Auctions
+	event AuctionCreated(
+		uint indexed auctionId,
+		address indexed nftAddress,
+		uint indexed tokenId,
+		address seller,
+		uint floorPrice,
+		uint startTimestamp,
+		uint endTimestamp
+	);
 
-    event AuctionCancelled(
-        uint indexed auctionId,
-        address indexed seller,
-        uint cancelTimestamp,
-        uint timestamp
-    );
+	event NewHighestBid(
+		uint indexed auctionId,
+		address indexed nftAddress,
+		address indexed bidder,
+		uint bid,
+		uint previousHighestBid,
+		uint timestamp
+	);
 
-    event AuctionFinished(
-        uint indexed auctionId,
-        address indexed seller,
-        address indexed buyer,
-        address nftAddress,
-        bool sold,
-        uint endTimestamp
-    );
+	event AuctionCancelled(
+		uint indexed auctionId,
+		address indexed seller,
+		uint cancelTimestamp,
+		uint timestamp
+	);
 
-    event BidWithdrawn(
-        uint indexed auctionId,
-        address indexed bidder,
-        address indexed nftAddress,
-        uint bid,
-        uint timestamp
-    );
+	event AuctionFinished(
+		uint indexed auctionId,
+		address indexed seller,
+		address indexed buyer,
+		address nftAddress,
+		bool sold,
+		uint endTimestamp
+	);
 
-    // Management
-    event FundsClaimed(address indexed user, uint amount, uint timestamp);
+	event BidWithdrawn(
+		uint indexed auctionId,
+		address indexed bidder,
+		address indexed nftAddress,
+		uint bid,
+		uint timestamp
+	);
 
-    event FeeAccountUpdated(address previousFeeAccount, address newfeeAcount);
+	// Management
+	event FundsClaimed(address indexed user, uint amount, uint timestamp);
 
-    event FeeAmountUpdated(uint previousFeeAmount, uint newFeeAmount);
+	event FeeAccountUpdated(address previousFeeAccount, address newfeeAcount);
 
-    // Modifiers
-    // Listing
-    modifier onlyAfterListingStart(bytes32 listingKey) {
-        require(
-            block.timestamp >= listings[listingKey].startTimestamp,
-            "Listing hasn't started yet"
-        );
-        _;
-    }
+	event FeeAmountUpdated(uint previousFeeAmount, uint newFeeAmount);
 
-    modifier onlyBeforeListingEnd(bytes32 listingKey) {
-        require(
-            block.timestamp < listings[listingKey].endTimestamp,
-            "Listing has ended"
-        );
-        _;
-    }
+	// Modifiers
+	// Shared
+	modifier nonZeroPrice(uint price) {
+		require(price > 0, "Price must be greater than zero");
+		_;
+	}
 
-    modifier onlyListingNotCancelled(bytes32 listingKey) {
-        require(
-            listings[listingKey].cancelled == false,
-            "Listing has been cancelled"
-        );
-        _;
-    }
+	/*
+        Also implicitly validates that the NFT address and token actually exists
+    */
+	modifier onlyNFTOwner(
+		IERC721 nft,
+		uint tokenId,
+		address senderAddress
+	) {
+		require(
+			nft.ownerOf(tokenId) == msg.sender,
+			"Must be the owner of the NFT to list in the marketplace"
+		);
+		_;
+	}
 
-    modifier onlyNotListingSeller(bytes32 listingKey) {
-        require(
-            msg.sender != listings[listingKey].seller,
-            "Seller can't call this function"
-        );
-        _;
-    }
+	modifier onlyValidTimestamps(uint start, uint end) {
+		require(
+			(start > 0 && end > block.timestamp && start < end),
+			"Invalid timestamps"
+		);
+		_;
+	}
 
-    modifier onlyListingSeller(bytes32 listingKey) {
-        require(
-            msg.sender == listings[listingKey].seller,
-            "Only the seller can call this function"
-        );
-        _;
-    }
+	modifier onlyApprovedNFTs(IERC721 nft, uint tokenId) {
+		require(
+			nft.getApproved(tokenId) == address(this),
+			"Marketplace must be approved to transfer the NFT"
+		);
+		_;
+	}
 
-    modifier onlyListingEndedOrCancelled(bytes32 listingKey) {
-        Listing memory listing = listings[listingKey];
-        require(
-            listing.sold ||
-                listing.cancelled ||
-                block.timestamp > listing.endTimestamp,
-            "Listing is still active"
-        );
-        _;
-    }
+	// Listing
+	modifier onlyAfterListingStart(bytes32 listingKey) {
+		require(
+			block.timestamp >= listings[listingKey].startTimestamp,
+			"Listing hasn't started yet"
+		);
+		_;
+	}
 
-    // Auctions
-    modifier onlyAfterAuctionStart(bytes32 auctionKey) {
-        require(
-            block.timestamp >= auctions[auctionKey].startTimestamp,
-            "Auction hasn't started yet"
-        );
-        _;
-    }
+	modifier onlyBeforeListingEnd(bytes32 listingKey) {
+		require(
+			block.timestamp < listings[listingKey].endTimestamp,
+			"Listing has ended"
+		);
+		_;
+	}
 
-    modifier onlyBeforeAuctionEnd(bytes32 auctionKey) {
-        require(
-            block.timestamp < auctions[auctionKey].endTimestamp,
-            "Auction has ended"
-        );
-        _;
-    }
+	modifier onlyListingNotCancelled(bytes32 listingKey) {
+		require(
+			listings[listingKey].cancelled == false,
+			"Listing has been cancelled"
+		);
+		_;
+	}
 
-    modifier onlyAuctionNotCancelled(bytes32 auctionKey) {
-        require(
-            auctions[auctionKey].cancelled == false,
-            "Auction has been cancelled"
-        );
-        _;
-    }
+	modifier onlyNotListingSeller(bytes32 listingKey) {
+		require(
+			msg.sender != listings[listingKey].seller,
+			"Seller can't call this function"
+		);
+		_;
+	}
 
-    modifier onlyNotAuctionSeller(bytes32 auctionKey) {
-        require(
-            msg.sender != auctions[auctionKey].seller,
-            "Seller can't call this function"
-        );
-        _;
-    }
+	modifier onlyListingSeller(bytes32 listingKey) {
+		require(
+			msg.sender == listings[listingKey].seller,
+			"Only the seller can call this function"
+		);
+		_;
+	}
 
-    modifier onlyAuctionSeller(bytes32 auctionKey) {
-        require(
-            msg.sender == auctions[auctionKey].seller,
-            "Only the seller can call this function"
-        );
-        _;
-    }
+	modifier onlyListingEndedOrCancelled(bytes32 listingKey) {
+		Listing memory listing = listings[listingKey];
+		require(
+			listing.sold ||
+				listing.cancelled ||
+				block.timestamp > listing.endTimestamp,
+			"Listing is still active"
+		);
+		_;
+	}
 
-    modifier onlyAuctionEndedOrCancelled(bytes32 auctionKey) {
-        require(
-            auctions[auctionKey].sold ||
-                auctions[auctionKey].cancelled ||
-                block.timestamp > auctions[auctionKey].endTimestamp,
-            "Auction is still active"
-        );
-        _;
-    }
+	// Auctions
+	modifier onlyAfterAuctionStart(bytes32 auctionKey) {
+		require(
+			block.timestamp >= auctions[auctionKey].startTimestamp,
+			"Auction hasn't started yet"
+		);
+		_;
+	}
 
-    modifier notInAuctionOrListing(address nftAddress, uint tokenId) {
-        // If the NFT is listed the seller address will be different from Zero
-        require(
-            (listings[getKey(nftAddress, tokenId)].seller == address(0)) &&
-                (auctions[getKey(nftAddress, tokenId)].seller == address(0)),
-            "NFT is already listed"
-        );
-        _;
-    }
+	modifier onlyBeforeAuctionEnd(bytes32 auctionKey) {
+		require(
+			block.timestamp < auctions[auctionKey].endTimestamp,
+			"Auction has ended"
+		);
+		_;
+	}
 
-    // Functions
-    // Helpers
-    function getKey(
-        address nftAddress,
-        uint tokenId
-    ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(nftAddress, tokenId));
-    }
+	modifier onlyAuctionNotCancelled(bytes32 auctionKey) {
+		require(
+			auctions[auctionKey].cancelled == false,
+			"Auction has been cancelled"
+		);
+		_;
+	}
 
-    // Listings
-    function createListing(
-        IERC721 nft,
-        uint tokenId,
-        uint price,
-        uint startTimestamp,
-        uint endTimestamp
-    )
-        external
-        nonReentrant
-        notInAuctionOrListing(address(nft), tokenId)
-        returns (bool)
-    {
-        return false;
-    }
+	modifier onlyNotAuctionSeller(bytes32 auctionKey) {
+		require(
+			msg.sender != auctions[auctionKey].seller,
+			"Seller can't call this function"
+		);
+		_;
+	}
 
-    function cancelListing(
-        bytes32 listingKey
-    )
-        external
-        nonReentrant
-        onlyListingSeller(listingKey)
-        onlyListingNotCancelled(listingKey)
-        onlyBeforeListingEnd(listingKey)
-        returns (bool)
-    {
-        return false;
-    }
+	modifier onlyAuctionSeller(bytes32 auctionKey) {
+		require(
+			msg.sender == auctions[auctionKey].seller,
+			"Only the seller can call this function"
+		);
+		_;
+	}
 
-    function updateListingPrice(
-        bytes32 listingKey,
-        uint newPrice
-    )
-        external
-        nonReentrant
-        onlyListingSeller(listingKey)
-        onlyListingNotCancelled(listingKey)
-        onlyBeforeListingEnd(listingKey)
-        returns (bool)
-    {
-        return false;
-    }
+	modifier onlyAuctionEndedOrCancelled(bytes32 auctionKey) {
+		require(
+			auctions[auctionKey].sold ||
+				auctions[auctionKey].cancelled ||
+				block.timestamp > auctions[auctionKey].endTimestamp,
+			"Auction is still active"
+		);
+		_;
+	}
 
-    // Auctions
-    function createAuction(
-        IERC721 nft,
-        uint tokenId,
-        uint floorPrice,
-        uint startTimestamp,
-        uint endTimestamp
-    )
-        external
-        nonReentrant
-        notInAuctionOrListing(address(nft), tokenId)
-        returns (bool)
-    {
-        return false;
-    }
+	modifier notInAuctionOrListing(IERC721 nft, uint tokenId) {
+		// If the NFT is listed the seller address will be different from Zero
+		require(
+			(listings[getKey(nft, tokenId)].seller == address(0)) &&
+				(auctions[getKey(nft, tokenId)].seller == address(0)),
+			"NFT is already listed"
+		);
+		_;
+	}
 
-    function bid(
-        bytes32 auctionKey
-    )
-        external
-        payable
-        nonReentrant
-        onlyNotAuctionSeller(auctionKey)
-        onlyAuctionNotCancelled(auctionKey)
-        onlyAfterAuctionStart(auctionKey)
-        onlyBeforeAuctionEnd(auctionKey)
-        returns (bool)
-    {
-        return false;
-    }
+	// Constructor
+	constructor(address feeDestinationAccount, uint feeAmount) {
+		feeAccount = payable(feeDestinationAccount);
+		fee = feeAmount;
+	}
 
-    function cancelAuction(
-        bytes32 auctionKey
-    )
-        external
-        nonReentrant
-        onlyAuctionSeller(auctionKey)
-        onlyAuctionNotCancelled(auctionKey)
-        onlyBeforeAuctionEnd(auctionKey)
-        returns (bool)
-    {
-        return false;
-    }
+	// Functions
+	// Helpers
+	function getKey(IERC721 nft, uint tokenId) public pure returns (bytes32) {
+		return keccak256(abi.encodePacked(address(nft), tokenId));
+	}
 
-    function endAuction(
-        bytes32 auctionKey
-    )
-        external
-        nonReentrant
-        onlyAuctionSeller(auctionKey)
-        onlyAuctionNotCancelled(auctionKey)
-        onlyBeforeAuctionEnd(auctionKey)
-        returns (bool)
-    {
-        return false;
-    }
+	function saveListing(
+		IERC721 nft,
+		uint tokenId,
+		uint price,
+		uint startTimestamp,
+		uint endTimestamp
+	)
+		internal
+		nonZeroPrice(price)
+		onlyValidTimestamps(startTimestamp, endTimestamp)
+		
+	{
+		// Increment listings count
+		listingsCount.increment();
 
-    function withDrawBid(
-        bytes32 auctionKey
-    )
-        external
-        nonReentrant
-        onlyAuctionEndedOrCancelled(auctionKey)
-        returns (bool)
-    {
-        return true;
-    }
+		Listing memory listing = Listing(
+			nft,
+			tokenId,
+			payable(msg.sender),
+			price,
+			false,
+			address(0),
+			startTimestamp,
+			endTimestamp,
+			false
+		);
 
-    // Management functions
-    // Get the final price which is seller's desired price + marketPlace fees
-    function getFinalPrice(bytes32 listingKey) public view returns (uint) {
-        return 0;
-    }
+		// Add the new listing to the mapping of listings
+		listings[getKey(nft, tokenId)] = listing;
+	}
 
-    // TODO change FeeAccount and emit an event
-    function changeFeeAcoount(
-        address payable newFeeAccount
-    ) external onlyOwner returns (bool) {
-        return false;
-    }
+	// Listings
+	function createListing(
+		IERC721 nft,
+		uint tokenId,
+		uint price,
+		uint startTimestamp,
+		uint endTimestamp
+	)
+		external
+		nonReentrant
+        notInAuctionOrListing(nft, tokenId)
+		onlyNFTOwner(nft, tokenId, msg.sender)
+		onlyApprovedNFTs(nft, tokenId)
+	{
+		saveListing(nft, tokenId, price, startTimestamp, endTimestamp);
 
-    // TODO change FeeAmoung and emit an event
-    function changeFeeAmount(
-        uint newFeeAmount
-    ) external onlyOwner returns (bool) {
-        return false;
-    }
+		// TODO try if instead of transfer it's possigle do approval here or permit and then just transfer on sell
+		// Transfer the NFT to the MarketPlace
+		IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
+
+		emit ListingCreated(
+			listingsCount.current(),
+			address(nft),
+			tokenId,
+			msg.sender,
+			price,
+			startTimestamp,
+			endTimestamp
+		);
+	}
+
+	function cancelListing(
+		bytes32 listingKey
+	)
+		external
+		nonReentrant
+		onlyListingSeller(listingKey)
+		onlyListingNotCancelled(listingKey)
+		onlyBeforeListingEnd(listingKey)
+		returns (bool)
+	{
+		return false;
+	}
+
+	function updateListingPrice(
+		bytes32 listingKey,
+		uint newPrice
+	)
+		external
+		nonReentrant
+		onlyListingSeller(listingKey)
+		onlyListingNotCancelled(listingKey)
+		onlyBeforeListingEnd(listingKey)
+		returns (bool)
+	{
+		return false;
+	}
+
+	// Auctions
+	function saveAuction(
+		IERC721 nft,
+		uint tokenId,
+		uint floorPrice,
+		uint startTimestamp,
+		uint endTimestamp
+	)
+		internal
+		nonZeroPrice(floorPrice)
+		onlyValidTimestamps(startTimestamp, endTimestamp)
+	{
+		// Increment auctions count
+		auctionsCount.increment();
+		// Add the new listing to the mapping of listings
+		Auction storage auction = auctions[getKey(nft, tokenId)];
+		// Set the expected attributes
+		auction.nft = IERC721(nft);
+		auction.tokenId = tokenId;
+		auction.seller = payable(msg.sender);
+		auction.floorPrice = floorPrice;
+		auction.startTimestamp = startTimestamp;
+		auction.endTimestamp = endTimestamp;
+	}
+
+	function createAuction(
+		IERC721 nft,
+		uint tokenId,
+		uint floorPrice,
+		uint startTimestamp,
+		uint endTimestamp
+	)
+		external
+		nonReentrant
+		notInAuctionOrListing(nft, tokenId)
+		onlyNFTOwner(IERC721(nft), tokenId, msg.sender)
+		onlyApprovedNFTs(IERC721(nft), tokenId)
+	{
+		saveAuction(nft, tokenId, floorPrice, startTimestamp, endTimestamp);
+
+		// TODO try if instead of transfer it's possigle do approval here or permit and then just transfer on sell
+		// Transfer the NFT to the MarketPlace
+		IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
+		emit AuctionCreated(
+			auctionsCount.current(),
+			address(nft),
+			tokenId,
+			msg.sender,
+			floorPrice,
+			startTimestamp,
+			endTimestamp
+		);
+	}
+
+	function bid(
+		bytes32 auctionKey
+	)
+		external
+		payable
+		nonReentrant
+		onlyNotAuctionSeller(auctionKey)
+		onlyAuctionNotCancelled(auctionKey)
+		onlyAfterAuctionStart(auctionKey)
+		onlyBeforeAuctionEnd(auctionKey)
+		returns (bool)
+	{
+		return false;
+	}
+
+	function cancelAuction(
+		bytes32 auctionKey
+	)
+		external
+		nonReentrant
+		onlyAuctionSeller(auctionKey)
+		onlyAuctionNotCancelled(auctionKey)
+		onlyBeforeAuctionEnd(auctionKey)
+		returns (bool)
+	{
+		return false;
+	}
+
+	function endAuction(
+		bytes32 auctionKey
+	)
+		external
+		nonReentrant
+		onlyAuctionSeller(auctionKey)
+		onlyAuctionNotCancelled(auctionKey)
+		onlyBeforeAuctionEnd(auctionKey)
+		returns (bool)
+	{
+		return false;
+	}
+
+	function withDrawBid(
+		bytes32 auctionKey
+	)
+		external
+		nonReentrant
+		onlyAuctionEndedOrCancelled(auctionKey)
+		returns (bool)
+	{
+		return true;
+	}
+
+	// Management functions
+	// Get the final price which is seller's desired price + marketPlace fees
+	function getFinalPrice(bytes32 listingKey) public view returns (uint) {
+		return 0;
+	}
+
+	// TODO change FeeAccount and emit an event
+	function changeFeeAcoount(
+		address payable newFeeAccount
+	) external onlyOwner returns (bool) {
+		return false;
+	}
+
+	// TODO change FeeAmoung and emit an event
+	function changeFeeAmount(
+		uint newFeeAmount
+	) external onlyOwner returns (bool) {
+		return false;
+	}
 }
