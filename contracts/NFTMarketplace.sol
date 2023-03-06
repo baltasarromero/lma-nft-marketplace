@@ -288,15 +288,24 @@ contract NFTMarketplace is
 		onlyBeforeListingEnd(listingKey)
 	{
 		Listing storage listingToBeCancelled = listings[listingKey];
-        // Mark as cancelled
+		// Mark as cancelled
 		listingToBeCancelled.cancelled = true;
-		
-        // Tranfer the token back to the onwer
-		IERC721(listingToBeCancelled.nft).safeTransferFrom(address(this), listingToBeCancelled.seller, listingToBeCancelled.tokenId);
-	
-        // Emit listing cancelled event
-        emit ListingCancelled(address(listingToBeCancelled.nft), listingToBeCancelled.tokenId, listingToBeCancelled.seller, block.timestamp);    
-    }
+
+		// Tranfer the token back to the onwer
+		IERC721(listingToBeCancelled.nft).safeTransferFrom(
+			address(this),
+			listingToBeCancelled.seller,
+			listingToBeCancelled.tokenId
+		);
+
+		// Emit listing cancelled event
+		emit ListingCancelled(
+			address(listingToBeCancelled.nft),
+			listingToBeCancelled.tokenId,
+			listingToBeCancelled.seller,
+			block.timestamp
+		);
+	}
 
 	function updateListingPrice(
 		bytes32 listingKey,
@@ -307,6 +316,29 @@ contract NFTMarketplace is
 		onlyListingSeller(listingKey)
 		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
+	{
+        Listing storage listingToUpdate = listings[listingKey];
+        uint oldPrice = uint(listingToUpdate.price);
+        // Check if the new price is different from the current price
+        require(newPrice != oldPrice, "New price must be different from current price");
+
+        // Update the listing price
+        listingToUpdate.price = newPrice;
+
+        // Emit listing price updated event
+        emit ListingPriceUpdated(address(listingToUpdate.nft), listingToUpdate.tokenId, oldPrice, newPrice, block.timestamp);
+    }
+
+	function purchase(
+		bytes32 listingKey
+	)
+		external
+		payable
+		nonReentrant
+		onlyNotListingSeller(listingKey)
+		onlyAfterListingStart(listingKey)
+		onlyBeforeListingEnd(listingKey)
+		onlyListingNotCancelled(listingKey)
 	{}
 
 	// Auctions
