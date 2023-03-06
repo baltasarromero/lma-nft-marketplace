@@ -19,39 +19,23 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 */
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
 
+/**
+    @dev Import OpenZeppelin's ERC721Holder to allow the marketplace to hold NFTs.
+*/
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 
-contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
+/**
+    @dev Import OpenZeppelin's ERC721 interface to interact with NFTs.
+*/
+import "../interfaces/INFTMarketplace.sol";
+
+contract NFTMarketplace is
+	Ownable,
+	ReentrancyGuard,
+	ERC721Holder,
+	INFTMarketplace
+{
 	// State Variables
-	struct Listing {
-		IERC721 nft;
-		uint tokenId;
-		address payable seller;
-		uint price;
-		bool sold;
-		address buyer;
-		uint startTimestamp;
-		uint endTimestamp;
-		bool cancelled;
-	}
-
-	struct Auction {
-		IERC721 nft;
-		uint tokenId;
-		address payable seller;
-		uint floorPrice;
-		uint sellPrice;
-		bool sold;
-		address buyer;
-		mapping(address => uint) fundsByBidder;
-		address highestBidder;
-		uint highestBid;
-		bool cancelled;
-		bool ended;
-		uint startTimestamp;
-		uint endTimestamp;
-	}
-
 	using Counters for Counters.Counter;
 	// Listing Data
 	Counters.Counter public listingsCount;
@@ -69,92 +53,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 	// Fee management
 	address payable public feeAccount;
 	uint public fee;
-
-	// Events
-	// Listings
-	event ListingCreated(
-		uint indexed listingId,
-		address indexed nftAddress,
-		uint indexed tokenId,
-		address seller,
-		uint price,
-		uint startTimestamp,
-		uint endTimestamp
-	);
-
-	event Purchase(
-		uint indexed listingId,
-		address indexed nftAddress,
-		address indexed seller,
-		address buyer,
-		uint price,
-		uint endTimestamp
-	);
-
-	event ListingPriceUpdated(
-		uint indexed listingId,
-		uint oldPrice,
-		uint newPrice,
-		uint timestamp
-	);
-
-	event ListingCancelled(
-		uint indexed listingId,
-		address indexed seller,
-		uint cancelTimestamp,
-		uint timestamp
-	);
-
-	// Auctions
-	event AuctionCreated(
-		uint indexed auctionId,
-		address indexed nftAddress,
-		uint indexed tokenId,
-		address seller,
-		uint floorPrice,
-		uint startTimestamp,
-		uint endTimestamp
-	);
-
-	event NewHighestBid(
-		uint indexed auctionId,
-		address indexed nftAddress,
-		address indexed bidder,
-		uint bid,
-		uint previousHighestBid,
-		uint timestamp
-	);
-
-	event AuctionCancelled(
-		uint indexed auctionId,
-		address indexed seller,
-		uint cancelTimestamp,
-		uint timestamp
-	);
-
-	event AuctionFinished(
-		uint indexed auctionId,
-		address indexed seller,
-		address indexed buyer,
-		address nftAddress,
-		bool sold,
-		uint endTimestamp
-	);
-
-	event BidWithdrawn(
-		uint indexed auctionId,
-		address indexed bidder,
-		address indexed nftAddress,
-		uint bid,
-		uint timestamp
-	);
-
-	// Management
-	event FundsClaimed(address indexed user, uint amount, uint timestamp);
-
-	event FeeAccountUpdated(address previousFeeAccount, address newfeeAcount);
-
-	event FeeAmountUpdated(uint previousFeeAmount, uint newFeeAmount);
 
 	// Modifiers
 	// Shared
@@ -214,7 +112,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 	modifier onlyListingNotCancelled(bytes32 listingKey) {
 		require(
 			listings[listingKey].cancelled == false,
-			"Listing has been cancelled"
+			"Listing is already cancelled"
 		);
 		_;
 	}
@@ -230,7 +128,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 	modifier onlyListingSeller(bytes32 listingKey) {
 		require(
 			msg.sender == listings[listingKey].seller,
-			"Only the seller can call this function"
+			"Not the listing seller"
 		);
 		_;
 	}
@@ -329,7 +227,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 		internal
 		nonZeroPrice(price)
 		onlyValidTimestamps(startTimestamp, endTimestamp)
-		
 	{
 		// Increment listings count
 		listingsCount.increment();
@@ -360,7 +257,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 	)
 		external
 		nonReentrant
-        notInAuctionOrListing(nft, tokenId)
+		notInAuctionOrListing(nft, tokenId)
 		onlyNFTOwner(nft, tokenId, msg.sender)
 		onlyApprovedNFTs(nft, tokenId)
 	{
@@ -389,10 +286,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 		onlyListingSeller(listingKey)
 		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
-		returns (bool)
 	{
-		return false;
-	}
+		Listing storage listingToBeCancelled = listings[listingKey];
+        // Mark as cancelled
+		listingToBeCancelled.cancelled = true;
+		
+        // Tranfer the token back to the onwer
+		IERC721(listingToBeCancelled.nft).safeTransferFrom(address(this), listingToBeCancelled.seller, listingToBeCancelled.tokenId);
+	
+        // Emit listing cancelled event
+        emit ListingCancelled(address(listingToBeCancelled.nft), listingToBeCancelled.tokenId, listingToBeCancelled.seller, block.timestamp);    
+    }
 
 	function updateListingPrice(
 		bytes32 listingKey,
@@ -403,10 +307,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 		onlyListingSeller(listingKey)
 		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
-		returns (bool)
-	{
-		return false;
-	}
+	{}
 
 	// Auctions
 	function saveAuction(
@@ -472,10 +373,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 		onlyAuctionNotCancelled(auctionKey)
 		onlyAfterAuctionStart(auctionKey)
 		onlyBeforeAuctionEnd(auctionKey)
-		returns (bool)
-	{
-		return false;
-	}
+	{}
 
 	function cancelAuction(
 		bytes32 auctionKey
@@ -485,10 +383,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 		onlyAuctionSeller(auctionKey)
 		onlyAuctionNotCancelled(auctionKey)
 		onlyBeforeAuctionEnd(auctionKey)
-		returns (bool)
-	{
-		return false;
-	}
+	{}
 
 	function endAuction(
 		bytes32 auctionKey
@@ -498,21 +393,11 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 		onlyAuctionSeller(auctionKey)
 		onlyAuctionNotCancelled(auctionKey)
 		onlyBeforeAuctionEnd(auctionKey)
-		returns (bool)
-	{
-		return false;
-	}
+	{}
 
 	function withDrawBid(
 		bytes32 auctionKey
-	)
-		external
-		nonReentrant
-		onlyAuctionEndedOrCancelled(auctionKey)
-		returns (bool)
-	{
-		return true;
-	}
+	) external nonReentrant onlyAuctionEndedOrCancelled(auctionKey) {}
 
 	// Management functions
 	// Get the final price which is seller's desired price + marketPlace fees
@@ -523,14 +408,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
 	// TODO change FeeAccount and emit an event
 	function changeFeeAcoount(
 		address payable newFeeAccount
-	) external onlyOwner returns (bool) {
-		return false;
-	}
+	) external onlyOwner {}
 
 	// TODO change FeeAmoung and emit an event
-	function changeFeeAmount(
-		uint newFeeAmount
-	) external onlyOwner returns (bool) {
-		return false;
-	}
+	function changeFeeAmount(uint newFeeAmount) external onlyOwner {}
 }
