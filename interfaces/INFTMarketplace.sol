@@ -5,7 +5,8 @@ pragma solidity 0.8.16;
     @dev Import OpenZeppelin's ERC721 interface to interact with NFTs.
 */
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
-interface INFTMarketplace  {
+
+interface INFTMarketplace {
 	// State Variables
 	struct Listing {
 		IERC721 nft;
@@ -58,7 +59,8 @@ interface INFTMarketplace  {
 	);
 
 	event ListingPriceUpdated(
-		uint indexed listingId,
+		address indexed nftAddress,
+		uint tokenId,
 		uint oldPrice,
 		uint newPrice,
 		uint timestamp
@@ -66,7 +68,7 @@ interface INFTMarketplace  {
 
 	event ListingCancelled(
 		address indexed nftAddress,
-        uint tokenId,
+		uint tokenId,
 		address indexed seller,
 		uint cancelTimestamp
 	);
@@ -136,6 +138,8 @@ interface INFTMarketplace  {
 
 	function updateListingPrice(bytes32 listingKey, uint newPrice) external;
 
+	function purchase(bytes32 listingKey) external payable;
+
 	// Audits
 	function createAuction(
 		IERC721 nft,
@@ -153,17 +157,11 @@ interface INFTMarketplace  {
 
 	function withDrawBid(bytes32 auctionKey) external;
 
-    // Management functions
+	// Management functions
 	// Get the final price which is seller's desired price + marketPlace fees
 	function getFinalPrice(bytes32 listingKey) external view returns (uint);
 
-    function changeFeeAcoount(
-		address payable newFeeAccount
-	) external;
+	function changeFeeAcoount(address payable newFeeAccount) external;
 
-	function changeFeeAmount(
-		uint newFeeAmount
-	) external;
-
+	function changeFeeAmount(uint newFeeAmount) external;
 }
-
