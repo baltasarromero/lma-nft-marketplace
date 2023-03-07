@@ -164,7 +164,7 @@ contract NFTMarketplace is
 	modifier onlyAuctionNotCancelled(bytes32 auctionKey) {
 		require(
 			auctions[auctionKey].cancelled == false,
-			"Auction has been cancelled"
+			"Auction is already cancelled"
 		);
 		_;
 	}
@@ -180,7 +180,7 @@ contract NFTMarketplace is
 	modifier onlyAuctionSeller(bytes32 auctionKey) {
 		require(
 			msg.sender == auctions[auctionKey].seller,
-			"Only the seller can call this function"
+			"Not the auction seller"
 		);
 		_;
 	}
@@ -268,7 +268,6 @@ contract NFTMarketplace is
 		IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
 
 		emit ListingCreated(
-			listingsCount.current(),
 			address(nft),
 			tokenId,
 			msg.sender,
@@ -423,11 +422,10 @@ contract NFTMarketplace is
 	{
 		saveAuction(nft, tokenId, floorPrice, startTimestamp, endTimestamp);
 
-		// TODO try if instead of transfer it's possigle do approval here or permit and then just transfer on sell
+		// TODO try if instead of transfer it's possible do approval here or permit and then just transfer on sell
 		// Transfer the NFT to the MarketPlace
 		IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
 		emit AuctionCreated(
-			auctionsCount.current(),
 			address(nft),
 			tokenId,
 			msg.sender,
@@ -457,7 +455,26 @@ contract NFTMarketplace is
 		onlyAuctionSeller(auctionKey)
 		onlyAuctionNotCancelled(auctionKey)
 		onlyBeforeAuctionEnd(auctionKey)
-	{}
+	{
+		Auction storage auctionToBeCancelled = auctions[auctionKey];
+		// Mark as cancelled
+		auctionToBeCancelled.cancelled = true;
+
+		// Tranfer the token back to the onwer
+		IERC721(auctionToBeCancelled.nft).safeTransferFrom(
+			address(this),
+			auctionToBeCancelled.seller,
+			auctionToBeCancelled.tokenId
+		);
+
+		// Emit auction cancelled event
+		emit AuctionCancelled(
+			address(auctionToBeCancelled.nft),
+			auctionToBeCancelled.tokenId,
+			auctionToBeCancelled.seller,
+			block.timestamp
+		);
+	}
 
 	function endAuction(
 		bytes32 auctionKey

@@ -40,7 +40,6 @@ interface INFTMarketplace {
 	// Events
 	// Listings
 	event ListingCreated(
-		uint indexed listingId,
 		address indexed nftAddress,
 		uint indexed tokenId,
 		address seller,
@@ -75,7 +74,6 @@ interface INFTMarketplace {
 
 	// Auctions
 	event AuctionCreated(
-		uint indexed auctionId,
 		address indexed nftAddress,
 		uint indexed tokenId,
 		address seller,
@@ -94,10 +92,10 @@ interface INFTMarketplace {
 	);
 
 	event AuctionCancelled(
-		uint indexed auctionId,
+		address indexed nftAddress,
+		uint tokenId,
 		address indexed seller,
-		uint cancelTimestamp,
-		uint timestamp
+		uint cancelTimestamp
 	);
 
 	event AuctionFinished(
