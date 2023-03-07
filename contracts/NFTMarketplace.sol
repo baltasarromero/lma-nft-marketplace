@@ -317,17 +317,26 @@ contract NFTMarketplace is
 		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
 	{
-        Listing storage listingToUpdate = listings[listingKey];
-        uint oldPrice = uint(listingToUpdate.price);
-        // Check if the new price is different from the current price
-        require(newPrice != oldPrice, "New price must be different from current price");
+		Listing storage listingToUpdate = listings[listingKey];
+		uint oldPrice = uint(listingToUpdate.price);
+		// Check if the new price is different from the current price
+		require(
+			newPrice != oldPrice,
+			"New price must be different from current price"
+		);
 
-        // Update the listing price
-        listingToUpdate.price = newPrice;
+		// Update the listing price
+		listingToUpdate.price = newPrice;
 
-        // Emit listing price updated event
-        emit ListingPriceUpdated(address(listingToUpdate.nft), listingToUpdate.tokenId, oldPrice, newPrice, block.timestamp);
-    }
+		// Emit listing price updated event
+		emit ListingPriceUpdated(
+			address(listingToUpdate.nft),
+			listingToUpdate.tokenId,
+			oldPrice,
+			newPrice,
+			block.timestamp
+		);
+	}
 
 	function purchase(
 		bytes32 listingKey
@@ -339,7 +348,40 @@ contract NFTMarketplace is
 		onlyAfterListingStart(listingKey)
 		onlyBeforeListingEnd(listingKey)
 		onlyListingNotCancelled(listingKey)
-	{}
+	{
+		Listing memory listingToPurchase = listings[listingKey];
+
+		// Ensure that the user has sent enough ether to purchase the NFT
+		require(
+			msg.value >= listingToPurchase.price,
+			"Insufficient funds to purchase NFT"
+		);
+
+		// Mark the listing as sold
+		listings[listingKey].sold = true;
+
+		// Transfer the NFT ownership to the buyer
+		listingToPurchase.nft.safeTransferFrom(
+			address(this),
+			msg.sender,
+			listingToPurchase.tokenId
+		);
+
+		// TODO Implement marketplace fee logic
+
+		// Transfer the ether to the seller
+		payable(listingToPurchase.seller).transfer(msg.value);
+
+		// Emit an event to indicate that the purchase has happened
+		emit Purchase(
+			address(listingToPurchase.nft),
+			listingToPurchase.tokenId,
+			listingToPurchase.seller,
+			msg.sender,
+			listingToPurchase.price,
+			block.timestamp
+		);
+	}
 
 	// Auctions
 	function saveAuction(

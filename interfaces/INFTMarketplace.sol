@@ -50,10 +50,10 @@ interface INFTMarketplace {
 	);
 
 	event Purchase(
-		uint indexed listingId,
 		address indexed nftAddress,
+		uint tokenId,
 		address indexed seller,
-		address buyer,
+		address indexed buyer,
 		uint price,
 		uint endTimestamp
 	);
