@@ -100,7 +100,6 @@ describe("NFTMarketplace", function () {
 			[testCarsNFT.address, 1]
 		);
 
-
 		const token1Listing: Listing =  {
 			listingKey: listing1Key,
 			nft: testCarsNFT,
@@ -497,7 +496,6 @@ describe("NFTMarketplace", function () {
 						listing1.startTimestamp,
 						listing1.endTimestamp
 					);
-
 			});
 
 			it("Should update the listing price", async function () {
