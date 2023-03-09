@@ -199,7 +199,7 @@ describe("NFTMarketplace", function () {
 				);
 				expect(retrievedAuction1.tokenId).to.equal(auction1.tokenId);
 				expect(retrievedAuction1.floorPrice).to.equal(auction1.price);
-				expect(retrievedAuction1.buyer).to.eq(
+				expect(retrievedAuction1.highestBidder).to.eq(
 					ethers.constants.AddressZero
 				);
 				expect(retrievedAuction1.cancelled).to.be.false;

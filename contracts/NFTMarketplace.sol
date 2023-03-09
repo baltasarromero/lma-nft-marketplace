@@ -451,7 +451,7 @@ contract NFTMarketplace is
 
 		Auction storage auction = auctions[auctionKey];
 		uint256 currentHighestBid = auction.highestBid;
-		uint256 newBid = auction.fundsByBidder[msg.sender] + msg.value;
+		uint256 newBid = auction.bids[msg.sender] + msg.value;
 
 		// Check if the bid value is greater than the floor price
 		require(
@@ -468,7 +468,7 @@ contract NFTMarketplace is
 		// Set the new highest bid
 		auction.highestBid = newBid;
 		auction.highestBidder = msg.sender;
-		auction.fundsByBidder[msg.sender] = newBid;
+		auction.bids[msg.sender] = newBid;
 
 		emit NewHighestBid(
 			address(auction.nft),
@@ -526,20 +526,22 @@ contract NFTMarketplace is
 		// End the auction
 		auction.ended = true;
 
+		// TODO implement Marketplace fee logic
+
 		// If there's a winner of the auction
 		if (auction.highestBidder != address(0)) {
+			// buyers userfunds should be set to 0
+			auction.bids[auction.highestBidder] = 0;
+
 			// Transfer the NFT to the winner
 			auction.nft.safeTransferFrom(
 				address(this),
 				auction.highestBidder,
 				auction.tokenId
 			);
+
 			// Transfer the bidAmount to the seller
-			auction.seller.transfer(auction.highestBid);
-			// HighestBidder becomes the buyer
-			auction.buyer = auction.highestBidder;
-			// buyers userfunds should be set to 0
-			auction.fundsByBidder[auction.buyer] = 0;
+			payable(auction.seller).transfer(auction.highestBid);
 		} else {
 			// If there is no winner. Transfer the NFT back to the seller
 			auction.nft.safeTransferFrom(
@@ -554,26 +556,25 @@ contract NFTMarketplace is
 			auction.tokenId,
 			auction.highestBid,
 			auction.seller,
-			auction.buyer,
+			auction.highestBidder,
 			block.timestamp
 		);
 	}
 
 	function withDrawBid(
 		bytes32 auctionKey
-	) external nonReentrant onlyAuctionEndedOrCancelled(auctionKey) {}
+	) external nonReentrant onlyAuctionEndedOrCancelled(auctionKey) {
+		Auction storage auction = auctions[auctionKey];
 
-	// Management functions
-	// Get the final price which is seller's desired price + marketPlace fees
-	function getFinalPrice(bytes32 listingKey) public view returns (uint) {
-		return 0;
+		// There's no need to check that the caller is not the highest bidder, because when an auction is ended
+		// the funds of the highest bidder are set to zero
+		// Get user's bid to bebids
+		uint userBid = auction.bids[msg.sender];
+		require(userBid > 0, "No funds to withdraw");
+
+        auction.bids[msg.sender] = 0;
+        payable(msg.sender).transfer(userBid);
+
+   		emit BidWithdrawn(msg.sender, address(auction.nft), auction.tokenId, userBid, block.timestamp);
 	}
-
-	// TODO change FeeAccount and emit an event
-	function changeFeeAcoount(
-		address payable newFeeAccount
-	) external onlyOwner {}
-
-	// TODO change FeeAmoung and emit an event
-	function changeFeeAmount(uint newFeeAmount) external onlyOwner {}
 }
