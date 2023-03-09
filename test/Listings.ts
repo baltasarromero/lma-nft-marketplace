@@ -5,11 +5,13 @@ import {
 	NFTMarketplace,
 	TestCarsNFT,
 	TestCarsNFT__factory,
-	NFTMarketplace__factory
+	NFTMarketplace__factory,
 } from "../typechain-types";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
 import { BigNumber } from "@ethersproject/bignumber";
+
+const hre = require("hardhat");
 
 describe("NFTMarketplace", function () {
 	// Types definition
@@ -20,19 +22,19 @@ describe("NFTMarketplace", function () {
 		nftLister: SignerWithAddress;
 		nftBuyer: SignerWithAddress;
 		testCarsNFT: TestCarsNFT;
-		token1Listing: Listing,
-		token3Listing: Listing
+		token1Listing: Listing;
+		token3Listing: Listing;
 	};
 
 	type Listing = {
-		listingKey: BytesLike,
-		nft: TestCarsNFT,
-		tokenId: number,
-		seller: SignerWithAddress,
-		price: BigNumber,
-		startTimestamp: BigNumber,
-		endTimestamp: BigNumber,
-	}
+		listingKey: BytesLike;
+		nft: TestCarsNFT;
+		tokenId: number;
+		seller: SignerWithAddress;
+		price: BigNumber;
+		startTimestamp: BigNumber;
+		endTimestamp: BigNumber;
+	};
 
 	// Global Variables
 	const initialFee: number = 100;
@@ -44,7 +46,7 @@ describe("NFTMarketplace", function () {
 		"ipfs://bafybeigagr2hhn554ocpmidas6ifqxlmzmug533z7sh75dmhfrnoj3pmje/2.json";
 	const CAR_3_METADATA_URI =
 		"ipfs://bafybeigagr2hhn554ocpmidas6ifqxlmzmug533z7sh75dmhfrnoj3pmje/3.json";
-	
+
 	async function deployNFMarketplaceAndMintTokensFixture(): Promise<MarketplaceDataForListing> {
 		// Contracts are deployed using the first signer/account by default
 		const [
@@ -67,7 +69,7 @@ describe("NFTMarketplace", function () {
 		const testCarsNFT: TestCarsNFT = await TestCarsNFT.deploy();
 
 		await testCarsNFT.safeMint(CAR_1_METADATA_URI, nftLister.address);
-		const tokenId1:number = 1;
+		const tokenId1: number = 1;
 
 		// The seller needs to approve the contract before listing
 		await testCarsNFT
@@ -77,7 +79,7 @@ describe("NFTMarketplace", function () {
 		// Mint 2nd Token
 		// Mint first NFT to be listed
 		await testCarsNFT.safeMint(CAR_2_METADATA_URI, nftAuctioneer.address);
-		const tokenId2:number = 2;
+		const tokenId2: number = 2;
 
 		// The seller needs to aprove the contract before listing
 		await testCarsNFT
@@ -87,12 +89,20 @@ describe("NFTMarketplace", function () {
 		// Mint another token but don't approve it
 		// Mint third NFT to be listed
 		await testCarsNFT.safeMint(CAR_3_METADATA_URI, nftLister.address);
-		const tokenId3:number = 3;
+		const tokenId3: number = 3;
 		// Don't approve the Marketplace to sell nft 3
 
+		// Define listing price
 		const listingPrice: BigNumber = ethers.utils.parseEther("1");
-		const listingStartTimestamp: BigNumber = BigNumber.from(Math.floor(Date.now() / 1000)); // now
-		const listingEndTimestamp: BigNumber = listingStartTimestamp.add(86400 * 10); // 86400 is one day so we create a 10 day listing period
+
+		// Define listing timestamps
+		
+		const listingStartTimestamp: BigNumber = BigNumber.from(
+			(await ethers.provider.getBlock("latest")).timestamp
+		);
+		const listingEndTimestamp: BigNumber = listingStartTimestamp.add(
+			86400 * 10
+		); // 86400 is one day so we create a 10 day listing period
 
 		// Calculate listing key
 		const listing1Key: BytesLike = ethers.utils.solidityKeccak256(
@@ -100,14 +110,14 @@ describe("NFTMarketplace", function () {
 			[testCarsNFT.address, 1]
 		);
 
-		const token1Listing: Listing =  {
+		const token1Listing: Listing = {
 			listingKey: listing1Key,
 			nft: testCarsNFT,
 			tokenId: tokenId1,
 			seller: nftLister,
 			price: listingPrice,
 			startTimestamp: listingStartTimestamp,
-			endTimestamp: listingEndTimestamp
+			endTimestamp: listingEndTimestamp,
 		};
 
 		// Calculate listing key
@@ -134,7 +144,7 @@ describe("NFTMarketplace", function () {
 			nftBuyer,
 			testCarsNFT,
 			token1Listing,
-			token3Listing
+			token3Listing,
 		};
 	}
 
@@ -148,10 +158,9 @@ describe("NFTMarketplace", function () {
 				);
 
 				listing1 = marketplaceDataForListing.token1Listing;
-			
 			});
 
-			it("Should create a new listing with the expected values and emit the ListingCreatedEvent", async function () {	
+			it("Should create a new listing with the expected values and emit the ListingCreatedEvent", async function () {
 				// Check if ListingCreated event was emitted
 				await expect(
 					marketplaceDataForListing.nftMarketplace
@@ -181,7 +190,7 @@ describe("NFTMarketplace", function () {
 				expect(
 					await marketplaceDataForListing.nftMarketplace.listingsCount()
 				).to.equal(1);
-				
+
 				// Retrieve Listing 1 and validate that all the attributes are properly created
 				const retrievedListing1 =
 					await marketplaceDataForListing.nftMarketplace.listings(
@@ -221,9 +230,12 @@ describe("NFTMarketplace", function () {
 			});
 
 			it("Should not create a new listing if start timestamp is after end timestamp", async function () {
-                // New start time
-                const invalidStart: BigNumber = listing1.startTimestamp.add(86400 * 2); // add two days
-                const invalidEnd: BigNumber = listing1.startTimestamp.add(86400); // add one day
+				// New start time
+				const invalidStart: BigNumber = listing1.startTimestamp.add(
+					86400 * 2
+				); // add two days
+				const invalidEnd: BigNumber =
+					listing1.startTimestamp.add(86400); // add one day
 
 				await expect(
 					marketplaceDataForListing.nftMarketplace
@@ -232,13 +244,13 @@ describe("NFTMarketplace", function () {
 							listing1.nft.address,
 							listing1.tokenId,
 							listing1.price,
-                            invalidStart,
-                            invalidEnd
+							invalidStart,
+							invalidEnd
 						)
 				).to.be.revertedWith("Invalid timestamps");
 			});
 
-            it("Should not create a new lsiting if start timestamp is 0", async function () {
+			it("Should not create a new lsiting if start timestamp is 0", async function () {
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
@@ -246,21 +258,22 @@ describe("NFTMarketplace", function () {
 							listing1.nft.address,
 							listing1.tokenId,
 							listing1.price,
-                            ethers.constants.Zero,
+							ethers.constants.Zero,
 							listing1.endTimestamp
 						)
 				).to.be.revertedWith("Invalid timestamps");
-            });
+			});
 
-            it("Should not create a new listing if end timestamp is in the past", async function () {
-                // Current timestamp
-                const blockTimestamp: number = (
+			it("Should not create a new listing if end timestamp is in the past", async function () {
+				// Current timestamp
+				const blockTimestamp: number = (
 					await ethers.provider.getBlock("latest")
 				).timestamp;
 
-                const invalidEndTimestamp: BigNumber = BigNumber.from(blockTimestamp).sub(86400); // One day before now. This is an invalid end timestamp
+				const invalidEndTimestamp: BigNumber =
+					BigNumber.from(blockTimestamp).sub(86400); // One day before now. This is an invalid end timestamp
 
-                await expect(
+				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
 						.createListing(
@@ -268,13 +281,14 @@ describe("NFTMarketplace", function () {
 							listing1.tokenId,
 							listing1.price,
 							listing1.startTimestamp,
-                            invalidEndTimestamp
+							invalidEndTimestamp
 						)
 				).to.be.revertedWith("Invalid timestamps");
-            });
+			});
 
 			it("Should not create a new listing if the caller is not the owner of the NFT", async function () {
-				const listing1: Listing = marketplaceDataForListing.token1Listing;
+				const listing1: Listing =
+					marketplaceDataForListing.token1Listing;
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(marketplaceDataForListing.nftBuyer)
@@ -291,7 +305,8 @@ describe("NFTMarketplace", function () {
 			});
 
 			it("Should not create a new listing if the contract is not approved to transfer the NFT", async function () {
-				const unapprovedListing: Listing = marketplaceDataForListing.token3Listing;
+				const unapprovedListing: Listing =
+					marketplaceDataForListing.token3Listing;
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(marketplaceDataForListing.nftLister)
@@ -309,7 +324,8 @@ describe("NFTMarketplace", function () {
 
 			describe("NotInAuctionOrListing modifier", function () {
 				it("Should prevent creating a listing for an NFT that is already in a listing", async function () {
-					const listing1: Listing = marketplaceDataForListing.token1Listing;
+					const listing1: Listing =
+						marketplaceDataForListing.token1Listing;
 					// Create a listing for the NFT
 					await marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
@@ -336,7 +352,8 @@ describe("NFTMarketplace", function () {
 				});
 
 				it("Should prevent creating a listing for an NFT that is already in an auction", async function () {
-					const listing1: Listing = marketplaceDataForListing.token1Listing;
+					const listing1: Listing =
+						marketplaceDataForListing.token1Listing;
 					// Create an auction for the NFT
 					marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
@@ -363,7 +380,8 @@ describe("NFTMarketplace", function () {
 				});
 
 				it("Should allow creating a listing for an NFT that is not in a listing or auction", async function () {
-					const listing1: Listing = marketplaceDataForListing.token1Listing;
+					const listing1: Listing =
+						marketplaceDataForListing.token1Listing;
 					// Check if ListingCreated event was emmited
 					await expect(
 						marketplaceDataForListing.nftMarketplace
@@ -385,8 +403,8 @@ describe("NFTMarketplace", function () {
 
 		describe("Cancel listings", function () {
 			let listing1: Listing;
-			
-			this.beforeEach(async function () {	
+
+			this.beforeEach(async function () {
 				marketplaceDataForListing = await loadFixture(
 					deployNFMarketplaceAndMintTokensFixture
 				);
@@ -395,14 +413,14 @@ describe("NFTMarketplace", function () {
 
 				// List token 1
 				await marketplaceDataForListing.nftMarketplace
-						.connect(listing1.seller)
-						.createListing(
-							listing1.nft.address,
-							listing1.tokenId,
-							listing1.price,
-							listing1.startTimestamp,
-							listing1.endTimestamp
-						);
+					.connect(listing1.seller)
+					.createListing(
+						listing1.nft.address,
+						listing1.tokenId,
+						listing1.price,
+						listing1.startTimestamp,
+						listing1.endTimestamp
+					);
 			});
 
 			it("Should cancel a listing", async function () {
@@ -609,7 +627,7 @@ describe("NFTMarketplace", function () {
 					await ethers.provider.getBlock("latest")
 				).timestamp;
 
-				const previousBalance = await ethers.provider.getBalance(
+				const sellerPreviousBalance = await ethers.provider.getBalance(
 					listing1.seller.address
 				);
 
@@ -617,7 +635,9 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(marketplaceDataForListing.nftBuyer)
-						.purchase(listing1.listingKey, { value: listing1.price })
+						.purchase(listing1.listingKey, {
+							value: listing1.price,
+						})
 				)
 					.to.emit(
 						marketplaceDataForListing.nftMarketplace,
@@ -646,7 +666,7 @@ describe("NFTMarketplace", function () {
 				// Seller's balance should be increased by the listing price
 				expect(
 					await ethers.provider.getBalance(listing1.seller.address)
-				).to.equal(previousBalance.add(listing1.price));
+				).to.equal(sellerPreviousBalance.add(listing1.price));
 			});
 
 			it("Should not allow a buyer to purchase a cancelled listing", async function () {
@@ -659,7 +679,9 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(marketplaceDataForListing.nftBuyer)
-						.purchase(listing1.listingKey, { value: listing1.price })
+						.purchase(listing1.listingKey, {
+							value: listing1.price,
+						})
 				).to.be.revertedWith("Listing is already cancelled");
 			});
 
@@ -686,9 +708,15 @@ describe("NFTMarketplace", function () {
 					);
 
 				const futureListing = marketplaceDataForListing.token3Listing;
-					
-				futureListing.startTimestamp = BigNumber.from(Math.floor(Date.now() / 1000) + 86400);
-				futureListing.endTimestamp = BigNumber.from(Math.floor(Date.now() / 1000) + 86400 * 10);
+
+				futureListing.startTimestamp = BigNumber.from(
+					(await ethers.provider.getBlock("latest")).timestamp
+				).add(86400);
+				futureListing.endTimestamp = BigNumber.from(
+					(await ethers.provider.getBlock("latest")).timestamp
+				).add(86400 * 10);
+		
+
 
 				await marketplaceDataForListing.nftMarketplace
 					.connect(futureListing.seller)
@@ -715,7 +743,9 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(marketplaceDataForListing.nftBuyer)
-						.purchase(listing1.listingKey, { value: listing1.price })
+						.purchase(listing1.listingKey, {
+							value: listing1.price,
+						})
 				).to.be.revertedWith("Listing has ended");
 			});
 
@@ -723,7 +753,9 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
-						.purchase(listing1.listingKey, { value: listing1.price })
+						.purchase(listing1.listingKey, {
+							value: listing1.price,
+						})
 				).to.be.revertedWith("Seller can't call this function");
 			});
 		});

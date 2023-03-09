@@ -133,17 +133,6 @@ contract NFTMarketplace is
 		_;
 	}
 
-	modifier onlyListingEndedOrCancelled(bytes32 listingKey) {
-		Listing memory listing = listings[listingKey];
-		require(
-			listing.sold ||
-				listing.cancelled ||
-				block.timestamp > listing.endTimestamp,
-			"Listing is still active"
-		);
-		_;
-	}
-
 	// Auctions
 	modifier onlyAfterAuctionStart(bytes32 auctionKey) {
 		require(
@@ -161,11 +150,24 @@ contract NFTMarketplace is
 		_;
 	}
 
+	modifier onlyAfterAuctionEndTime(bytes32 auctionKey) {
+		require(
+			block.timestamp > auctions[auctionKey].endTimestamp,
+			"Haven't reached end time"
+		);
+		_;
+	}
+
 	modifier onlyAuctionNotCancelled(bytes32 auctionKey) {
 		require(
 			auctions[auctionKey].cancelled == false,
 			"Auction is already cancelled"
 		);
+		_;
+	}
+
+	modifier onlyAuctionNotEnded(bytes32 auctionKey) {
+		require(! auctions[auctionKey].ended, "Auction already ended");
 		_;
 	}
 
@@ -187,9 +189,7 @@ contract NFTMarketplace is
 
 	modifier onlyAuctionEndedOrCancelled(bytes32 auctionKey) {
 		require(
-			auctions[auctionKey].sold ||
-				auctions[auctionKey].cancelled ||
-				block.timestamp > auctions[auctionKey].endTimestamp,
+			auctions[auctionKey].cancelled || auctions[auctionKey].ended,
 			"Auction is still active"
 		);
 		_;
@@ -381,7 +381,7 @@ contract NFTMarketplace is
 			block.timestamp
 		);
 	}
-  
+
 	// Auctions
 	function saveAuction(
 		IERC721 nft,
@@ -445,7 +445,40 @@ contract NFTMarketplace is
 		onlyAuctionNotCancelled(auctionKey)
 		onlyAfterAuctionStart(auctionKey)
 		onlyBeforeAuctionEnd(auctionKey)
-	{}
+	{
+		// Reject payments of 0 ETH
+		require(msg.value > 0, "Send ether to place a bid");
+
+		Auction storage auction = auctions[auctionKey];
+		uint256 currentHighestBid = auction.highestBid;
+		uint256 newBid = auction.fundsByBidder[msg.sender] + msg.value;
+
+		// Check if the bid value is greater than the floor price
+		require(
+			newBid >= auction.floorPrice,
+			"Bid value should be higher than the floor price"
+		);
+
+		// Check if the bid value is greater than the current highest bid
+		require(
+			newBid > currentHighestBid,
+			"Bid should be higher than the current highest bid"
+		);
+
+		// Set the new highest bid
+		auction.highestBid = newBid;
+		auction.highestBidder = msg.sender;
+		auction.fundsByBidder[msg.sender] = newBid;
+
+		emit NewHighestBid(
+			address(auction.nft),
+			auction.tokenId,
+			msg.sender,
+			newBid,
+			currentHighestBid,
+			block.timestamp
+		);
+	}
 
 	function cancelAuction(
 		bytes32 auctionKey
@@ -459,6 +492,8 @@ contract NFTMarketplace is
 		Auction storage auctionToBeCancelled = auctions[auctionKey];
 		// Mark as cancelled
 		auctionToBeCancelled.cancelled = true;
+		// We reset the highest bidder so they can claim the funds
+		auctionToBeCancelled.highestBidder = address(0);
 
 		// Tranfer the token back to the onwer
 		IERC721(auctionToBeCancelled.nft).safeTransferFrom(
@@ -483,8 +518,46 @@ contract NFTMarketplace is
 		nonReentrant
 		onlyAuctionSeller(auctionKey)
 		onlyAuctionNotCancelled(auctionKey)
-		onlyBeforeAuctionEnd(auctionKey)
-	{}
+		onlyAfterAuctionEndTime(auctionKey)
+		onlyAuctionNotEnded(auctionKey)
+	{
+		Auction storage auction = auctions[auctionKey];
+		
+		// End the auction
+		auction.ended = true;
+
+		// If there's a winner of the auction
+		if (auction.highestBidder != address(0)) {
+			// Transfer the NFT to the winner
+			auction.nft.safeTransferFrom(
+				address(this),
+				auction.highestBidder,
+				auction.tokenId
+			);
+			// Transfer the bidAmount to the seller
+			auction.seller.transfer(auction.highestBid);
+			// HighestBidder becomes the buyer
+			auction.buyer = auction.highestBidder;
+			// buyers userfunds should be set to 0
+			auction.fundsByBidder[auction.buyer] = 0;
+		} else {
+			// If there is no winner. Transfer the NFT back to the seller
+			auction.nft.safeTransferFrom(
+				address(this),
+				auction.seller,
+				auction.tokenId
+			);
+		}
+
+		emit AuctionFinished(
+			address(auction.nft),
+			auction.tokenId,
+			auction.highestBid,
+			auction.seller,
+			auction.buyer,
+			block.timestamp
+		);
+	}
 
 	function withDrawBid(
 		bytes32 auctionKey

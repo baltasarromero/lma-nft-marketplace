@@ -20,8 +20,8 @@ describe("NFTMarketplace", function () {
 		nftLister: SignerWithAddress;
 		nftBuyer: SignerWithAddress;
 		testCarsNFT: TestCarsNFT;
-		token1Auction: Auction;
-		token2Auction: Auction;
+		auction1: Auction;
+		auction2: Auction;
 	};
 
 	type Auction = {
@@ -69,7 +69,7 @@ describe("NFTMarketplace", function () {
 		await testCarsNFT.safeMint(CAR_1_METADATA_URI, nftLister.address);
 		const tokenId1: number = 1;
 
-		// The seller needs to approve the contract before listing
+		// The seller needs to approve the contract before the auction is created
 		await testCarsNFT
 			.connect(nftLister)
 			.approve(nftMarketplace.address, tokenId1);
@@ -79,7 +79,7 @@ describe("NFTMarketplace", function () {
 		await testCarsNFT.safeMint(CAR_2_METADATA_URI, nftAuctioneer.address);
 		const tokenId2: number = 2;
 
-		// The seller needs to aprove the contract before listing
+		// The seller needs to approve the contract before auction
 		await testCarsNFT
 			.connect(nftAuctioneer)
 			.approve(nftMarketplace.address, tokenId2);
@@ -90,15 +90,15 @@ describe("NFTMarketplace", function () {
 		const tokenId3: number = 3;
 		// Don't approve the Marketplace to sell nft 3
 
-		const listingPrice: BigNumber = ethers.utils.parseEther("1");
-		const listingStartTimestamp: BigNumber = BigNumber.from(
-			Math.floor(Date.now() / 1000)
-		); // now
-		const listingEndTimestamp: BigNumber = listingStartTimestamp.add(
+		const auctionPrice: BigNumber = ethers.utils.parseEther("1");
+        const auctionStartTimestamp: BigNumber = BigNumber.from(
+			(await ethers.provider.getBlock("latest")).timestamp
+		);
+		const auctionEndTimestamp: BigNumber = auctionStartTimestamp.add(
 			86400 * 10
 		); // 86400 is one day so we create a 10 day listing period
 
-		// Calculate listing key
+		// Calculate auction key
 		const auction1Key: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[testCarsNFT.address, 1]
@@ -109,9 +109,9 @@ describe("NFTMarketplace", function () {
 			nft: testCarsNFT,
 			tokenId: tokenId1,
 			seller: nftLister,
-			price: listingPrice,
-			startTimestamp: listingStartTimestamp,
-			endTimestamp: listingEndTimestamp,
+			price: auctionPrice,
+			startTimestamp: auctionStartTimestamp,
+			endTimestamp: auctionEndTimestamp,
 		};
 
 		// Create one auction
@@ -125,20 +125,20 @@ describe("NFTMarketplace", function () {
 				token1Auction.endTimestamp
 			);
 
-		// Calculate listing key
-		const listing3Key: BytesLike = ethers.utils.solidityKeccak256(
+		// Calculate the auction key
+		const token3AuctionKey: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[testCarsNFT.address, 3]
 		);
 
-		const token3Listing: Auction = {
-			auctionKey: listing3Key,
+		const token3Auction: Auction = {
+			auctionKey: token3AuctionKey,
 			nft: testCarsNFT,
 			tokenId: tokenId3,
 			seller: nftLister,
-			price: listingPrice,
-			startTimestamp: listingStartTimestamp,
-			endTimestamp: listingEndTimestamp,
+			price: auctionPrice,
+			startTimestamp: auctionStartTimestamp,
+			endTimestamp: auctionEndTimestamp,
 		};
 
 		return {
@@ -148,8 +148,8 @@ describe("NFTMarketplace", function () {
 			nftLister,
 			nftBuyer,
 			testCarsNFT,
-			token1Auction: token1Auction,
-			token2Auction: token3Listing,
+			auction1: token1Auction,
+			auction2: token3Auction,
 		};
 	}
 
@@ -161,7 +161,7 @@ describe("NFTMarketplace", function () {
 				cancelAuctionsDataFixture
 			);
 
-			auction1 = cancelAuctionsFixture.token1Auction;
+			auction1 = cancelAuctionsFixture.auction1;
 		});
 
 		describe("Cancel Auctions", function () {
@@ -192,6 +192,7 @@ describe("NFTMarketplace", function () {
 						auction1.auctionKey
 					);
 				expect(retrievedAuction.cancelled).to.be.true;
+                expect(retrievedAuction.highestBidder).to.equal(ethers.constants.AddressZero);
 
 				// Check that the NFT has been transferred back to the seller
 				expect(
@@ -216,10 +217,10 @@ describe("NFTMarketplace", function () {
 			});
 
 			it("Should revert if the auction has already ended", async function () {
-				// Increase time to be past Listing's end time
+				// Increase time to be past Auction's end time
 				time.increaseTo(auction1.endTimestamp.add(1));
 
-				// Try to cancel the listing
+				// Try to cancel the auction
 				await expect(
 					cancelAuctionsFixture.nftMarketplace
 						.connect(auction1.seller)
@@ -228,7 +229,7 @@ describe("NFTMarketplace", function () {
 			});
 
 			it("Should revert if the caller is not the auction seller", async function () {
-                // Try to cancel the listing as the buyer
+                // Try to cancel the auction as the buyer
 				await expect(
 					cancelAuctionsFixture.nftMarketplace
 						.connect(cancelAuctionsFixture.nftBuyer)

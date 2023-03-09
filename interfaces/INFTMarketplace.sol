@@ -26,7 +26,6 @@ interface INFTMarketplace {
 		address payable seller;
 		uint floorPrice;
 		uint sellPrice;
-		bool sold;
 		address buyer;
 		mapping(address => uint) fundsByBidder;
 		address highestBidder;
@@ -83,8 +82,8 @@ interface INFTMarketplace {
 	);
 
 	event NewHighestBid(
-		uint indexed auctionId,
 		address indexed nftAddress,
+		uint tokenId,
 		address indexed bidder,
 		uint bid,
 		uint previousHighestBid,
@@ -99,11 +98,11 @@ interface INFTMarketplace {
 	);
 
 	event AuctionFinished(
-		uint indexed auctionId,
+		address indexed nftAddress,
+		uint tokenId,
+		uint amountId,
 		address indexed seller,
 		address indexed buyer,
-		address nftAddress,
-		bool sold,
 		uint endTimestamp
 	);
 
