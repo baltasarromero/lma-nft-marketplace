@@ -560,19 +560,6 @@ describe("NFTMarketplace", function () {
 				);
 			});
 
-			it("Should revert if the caller is not the seller", async function () {
-				const newPrice = ethers.utils.parseEther("2");
-				// Try to update the listing price with the same price
-				it("Should revert if the caller is not the listing seller", async function () {
-					// Try to cancel the listing as the buyer
-					await expect(
-						marketplaceDataForListing.nftMarketplace
-							.connect(marketplaceDataForListing.nftBuyer)
-							.updateListingPrice(listing1.listingKey, newPrice)
-					).to.be.revertedWith("Not the listing seller");
-				});
-			});
-
 			it("Should revert if the listing is already cancelled", async function () {
 				// Cancel the listing
 				await marketplaceDataForListing.nftMarketplace
@@ -598,6 +585,16 @@ describe("NFTMarketplace", function () {
 						.connect(listing1.seller)
 						.updateListingPrice(listing1.listingKey, newPrice)
 				).to.be.revertedWith("Listing has ended");
+			});
+
+			it("Should revert if the caller is not the seller", async function () {
+				const newPrice = ethers.utils.parseEther("2");
+				// Try to cancel the listing as the buyer
+				await expect(
+					marketplaceDataForListing.nftMarketplace
+						.connect(marketplaceDataForListing.nftBuyer)
+						.updateListingPrice(listing1.listingKey, newPrice)
+				).to.be.revertedWith("Not the listing seller");
 			});
 		});
 
