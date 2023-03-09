@@ -26,8 +26,7 @@ interface INFTMarketplace {
 		address payable seller;
 		uint floorPrice;
 		uint sellPrice;
-		address buyer;
-		mapping(address => uint) fundsByBidder;
+		mapping(address => uint) bids;
 		address highestBidder;
 		uint highestBid;
 		bool cancelled;
@@ -107,9 +106,9 @@ interface INFTMarketplace {
 	);
 
 	event BidWithdrawn(
-		uint indexed auctionId,
 		address indexed bidder,
 		address indexed nftAddress,
+		uint tokenId,
 		uint bid,
 		uint timestamp
 	);
@@ -153,12 +152,4 @@ interface INFTMarketplace {
 	function endAuction(bytes32 auctionKey) external;
 
 	function withDrawBid(bytes32 auctionKey) external;
-
-	// Management functions
-	// Get the final price which is seller's desired price + marketPlace fees
-	function getFinalPrice(bytes32 listingKey) external view returns (uint);
-
-	function changeFeeAcoount(address payable newFeeAccount) external;
-
-	function changeFeeAmount(uint newFeeAmount) external;
 }
