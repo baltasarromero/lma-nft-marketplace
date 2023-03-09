@@ -69,7 +69,7 @@ describe("NFTMarketplace", function () {
 		await testCarsNFT.safeMint(CAR_1_METADATA_URI, nftLister.address);
 		const tokenId1:number = 1;
 
-		// The seller needs to approve the contract before listing
+		// The seller needs to approve the contract before auction
 		await testCarsNFT
 			.connect(nftLister)
 			.approve(nftMarketplace.address, tokenId1);
@@ -79,7 +79,7 @@ describe("NFTMarketplace", function () {
 		await testCarsNFT.safeMint(CAR_2_METADATA_URI, nftAuctioneer.address);
 		const tokenId2:number = 2;
 
-		// The seller needs to aprove the contract before listing
+		// The seller needs to approve the contract before auction
 		await testCarsNFT
 			.connect(nftAuctioneer)
 			.approve(nftMarketplace.address, tokenId2);
@@ -90,41 +90,45 @@ describe("NFTMarketplace", function () {
 		const tokenId3:number = 3;
 		// Don't approve the Marketplace to sell nft 3
 
-		const listingPrice: BigNumber = ethers.utils.parseEther("1");
-		const listingStartTimestamp: BigNumber = BigNumber.from(Math.floor(Date.now() / 1000)); // now
-		const listingEndTimestamp: BigNumber = listingStartTimestamp.add(86400 * 10); // 86400 is one day so we create a 10 day listing period
+		const auctionPrice: BigNumber = ethers.utils.parseEther("1");
+		const auctionStartTimestamp: BigNumber = BigNumber.from(
+			(await ethers.provider.getBlock("latest")).timestamp
+		);
+		const auctionEndTimestamp: BigNumber = auctionStartTimestamp.add(
+			86400 * 10
+		); // 86400 is one day so we create a 10 day listing period
 
-		// Calculate listing key
-		const listing1Key: BytesLike = ethers.utils.solidityKeccak256(
+		// Calculate auction key
+		const auction1Key: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[testCarsNFT.address, 1]
 		);
 
 
-		const token1Listing: Auction =  {
-			auctionKey: listing1Key,
+		const token1Auction: Auction =  {
+			auctionKey: auction1Key,
 			nft: testCarsNFT,
 			tokenId: tokenId1,
 			seller: nftLister,
-			price: listingPrice,
-			startTimestamp: listingStartTimestamp,
-			endTimestamp: listingEndTimestamp
+			price: auctionPrice,
+			startTimestamp: auctionStartTimestamp,
+			endTimestamp: auctionEndTimestamp
 		};
 
-		// Calculate listing key
-		const listing3Key: BytesLike = ethers.utils.solidityKeccak256(
+		// Calculate auction key
+		const auction3Key: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[testCarsNFT.address, 3]
 		);
 
-		const token3Listing: Auction = {
-			auctionKey: listing3Key,
+		const token3Auction: Auction = {
+			auctionKey: auction3Key,
 			nft: testCarsNFT,
 			tokenId: tokenId3,
 			seller: nftLister,
-			price: listingPrice,
-			startTimestamp: listingStartTimestamp,
-			endTimestamp: listingEndTimestamp,
+			price: auctionPrice,
+			startTimestamp: auctionStartTimestamp,
+			endTimestamp: auctionEndTimestamp,
 		};
 
 		return {
@@ -134,8 +138,8 @@ describe("NFTMarketplace", function () {
 			nftLister,
 			nftBuyer,
 			testCarsNFT,
-			token1Auction: token1Listing,
-			token2Auction: token3Listing
+			token1Auction: token1Auction,
+			token2Auction: token3Auction
 		};
 	}
 
@@ -154,7 +158,7 @@ describe("NFTMarketplace", function () {
 
 			it("Should create a new auction with the expected values and emit the AuctionCreatedEvent", async function () {
 			
-				// Check if ListingCreated event was emitted
+				// Check if AuctionCreated event was emitted
 				await expect(
 					marketplaceDataForAuction.nftMarketplace
 						.connect(auction1.seller)
@@ -179,12 +183,12 @@ describe("NFTMarketplace", function () {
 						auction1.endTimestamp
 					);
 
-				// There should be 1 listing now
+				// There should be 1 auction now
 				expect(
 					await marketplaceDataForAuction.nftMarketplace.auctionsCount()
 				).to.equal(1);
 				
-				// Retrieve Listing 1 and validate that all the attributes are properly created
+				// Retrieve auction 1 and validate that all the attributes are properly created
 				const retrievedAuction1 =
 					await marketplaceDataForAuction.nftMarketplace.auctions(
 						auction1.auctionKey
@@ -195,7 +199,6 @@ describe("NFTMarketplace", function () {
 				);
 				expect(retrievedAuction1.tokenId).to.equal(auction1.tokenId);
 				expect(retrievedAuction1.floorPrice).to.equal(auction1.price);
-				expect(retrievedAuction1.sold).to.be.false;
 				expect(retrievedAuction1.buyer).to.eq(
 					ethers.constants.AddressZero
 				);
