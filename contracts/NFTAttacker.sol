@@ -5,8 +5,6 @@ import "./NFTMarketplace.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-import "hardhat/console.sol";
-
 contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 	enum FunctionNames {
 		NONE,
