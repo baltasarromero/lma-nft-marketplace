@@ -87,6 +87,20 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	}
 
 	// Listing
+	modifier onlyValidListing(bytes32 listingKey) {
+		Listing memory listing = listings[listingKey];
+		require(
+			address(listing.nft) != address(0) &&
+				listing.tokenId != 0 &&
+				listing.seller != address(0) &&
+				listing.price > 0 &&
+				listing.startTimestamp > 0 &&
+				listing.endTimestamp > 0,
+			"Not a valid listing"
+		);
+		_;
+	}
+
 	modifier onlyAfterListingStart(bytes32 listingKey) {
 		require(
 			block.timestamp >= listings[listingKey].startTimestamp,
@@ -97,11 +111,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 
 	modifier onlyBeforeListingEnd(bytes32 listingKey) {
 		require(block.timestamp < listings[listingKey].endTimestamp, "Listing has ended");
-		_;
-	}
-
-	modifier onlyListingNotCancelled(bytes32 listingKey) {
-		require(listings[listingKey].cancelled == false, "Listing is already cancelled");
 		_;
 	}
 
@@ -225,14 +234,11 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		uint endTimestamp
 	)
 		external
-		nonReentrant
 		notInAuctionOrListing(nft, tokenId)
 		onlyNFTOwnerOrApprovedForAll(nft, tokenId, msg.sender)
 		onlyApprovedNFTs(nft, tokenId)
 	{
 		_saveListing(nft, tokenId, price, startTimestamp, endTimestamp);
-
-		_transferNFTToMarketplace(nft, tokenId);
 
 		emit ListingCreated(address(nft), tokenId, msg.sender, price, startTimestamp, endTimestamp);
 	}
@@ -241,29 +247,21 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		bytes32 listingKey
 	)
 		external
-		nonReentrant
+		onlyValidListing(listingKey)
 		onlyListingSeller(listingKey)
-		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
 	{
+		// Get listing attributes to trigger event
 		Listing storage listingToBeCancelled = listings[listingKey];
-		// Mark as cancelled
-		listingToBeCancelled.cancelled = true;
+		address listingNFTAddress = address(listingToBeCancelled.nft);
+		uint listingTokenId = listingToBeCancelled.tokenId;
+		address listingSeller = listingToBeCancelled.seller;
 
-		// Tranfer the token back to the onwer
-		listingToBeCancelled.nft.safeTransferFrom(
-			address(this),
-			listingToBeCancelled.seller,
-			listingToBeCancelled.tokenId
-		);
+		// Delete the listing from the MarketPlace
+		delete listings[listingKey];
 
 		// Emit listing cancelled event
-		emit ListingCancelled(
-			address(listingToBeCancelled.nft),
-			listingToBeCancelled.tokenId,
-			listingToBeCancelled.seller,
-			block.timestamp
-		);
+		emit ListingCancelled(listingNFTAddress, listingTokenId, listingSeller, block.timestamp);
 	}
 
 	function updateListingPrice(
@@ -271,8 +269,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		uint newPrice
 	)
 		external
+		onlyValidListing(listingKey)
 		onlyListingSeller(listingKey)
-		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
 	{
 		Listing storage listingToUpdate = listings[listingKey];
@@ -299,10 +297,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		external
 		payable
 		nonReentrant
+		onlyValidListing(listingKey)
 		onlyNotListingSeller(listingKey)
 		onlyAfterListingStart(listingKey)
 		onlyBeforeListingEnd(listingKey)
-		onlyListingNotCancelled(listingKey)
 	{
 		Listing memory listingToPurchase = listings[listingKey];
 
@@ -312,12 +310,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		// Mark the listing as sold
 		listings[listingKey].sold = true;
 
+		address nftOwner = listingToPurchase.nft.ownerOf(listingToPurchase.tokenId);
+
 		// Transfer the NFT ownership to the buyer
-		listingToPurchase.nft.safeTransferFrom(
-			address(this),
-			msg.sender,
-			listingToPurchase.tokenId
-		);
+		listingToPurchase.nft.safeTransferFrom(nftOwner, msg.sender, listingToPurchase.tokenId);
 
 		// Transfer the ether to the seller
 		payable(listingToPurchase.seller).transfer(msg.value);
@@ -401,22 +397,24 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		// Check if the bid value is greater than the floor price
 		require(newBid >= auction.floorPrice, "Bid value should be higher than the floor price");
 
-		// Check if the bid value is greater than the current highest bid
-		require(newBid > currentHighestBid, "Bid should be higher than the current highest bid");
-
-		// Set the new highest bid
-		auction.highestBid = newBid;
-		auction.highestBidder = msg.sender;
+		// Add the bid to the mapping of bids
 		auction.bids[msg.sender] = newBid;
 
-		emit NewHighestBid(
-			address(auction.nft),
-			auction.tokenId,
-			msg.sender,
-			newBid,
-			currentHighestBid,
-			block.timestamp
-		);
+		// Check if the new bid is now the highest
+		if (newBid > currentHighestBid) {
+			// Set the new highest bid
+			auction.highestBid = newBid;
+			auction.highestBidder = msg.sender;
+
+			emit NewHighestBid(
+				address(auction.nft),
+				auction.tokenId,
+				msg.sender,
+				newBid,
+				currentHighestBid,
+				block.timestamp
+			);
+		}
 	}
 
 	function cancelAuction(
@@ -476,7 +474,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 			auction.nft.safeTransferFrom(address(this), auction.highestBidder, auction.tokenId);
 
 			// Transfer the bidAmount to the seller
-			(bool sent, ) = payable(auction.seller).call{value: auction.highestBid}("");
+			(bool sent, ) = payable(auction.seller).call{ value: auction.highestBid }("");
 
 			require(sent, "Failed to pay the seller");
 		} else {
@@ -501,12 +499,14 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 
 		// There's no need to check that the caller is not the highest bidder, because when an auction is ended
 		// the funds of the highest bidder are set to zero
-		// Get user's bid to bebids
+		// Get user's bid 
 		uint userBid = auction.bids[msg.sender];
 		require(userBid > 0, "No funds to withdraw");
 
-    auction.bids[msg.sender] = 0;
-		(bool sent, ) = payable(msg.sender).call{value: userBid}("");
+		auction.bids[msg.sender] = 0;
+		(bool sent, ) = payable(msg.sender).call{ value: userBid }("");
+
+		require(sent, "Failed to send bid funds to bidder");
 
 		emit BidWithdrawn(
 			msg.sender,
