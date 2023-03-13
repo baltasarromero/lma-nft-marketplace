@@ -465,6 +465,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		// End the auction
 		auction.ended = true;
 
+		// TODO implement Marketplace fee logic
+
 		// If there's a winner of the auction
 		if (auction.highestBidder != address(0)) {
 			// buyers userfunds should be set to 0
@@ -503,7 +505,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		uint userBid = auction.bids[msg.sender];
 		require(userBid > 0, "No funds to withdraw");
 
-		auction.bids[msg.sender] = 0;
+    auction.bids[msg.sender] = 0;
 		(bool sent, ) = payable(msg.sender).call{value: userBid}("");
 
 		emit BidWithdrawn(
