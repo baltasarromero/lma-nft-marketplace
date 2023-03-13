@@ -5,12 +5,12 @@ import "./NFTMarketplace.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
+import "hardhat/console.sol";
+
 contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 	enum FunctionNames {
 		NONE,
 		PURCHASE,
-		CANCEL_LISTING,
-		CREATE_LISTING,
 		CREATE_AUCTION,
 		CANCEL_AUCTION,
 		END_AUCTION,
@@ -57,9 +57,6 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 	) external returns (bytes4) {
 		if (attackedFunction == FunctionNames.NONE) {
 			return this.onERC721Received.selector;
-		} else if (attackedFunction == FunctionNames.CANCEL_LISTING) {
-			// Attempt to reenter cancelListing function
-			lmaNFTMarketplace.cancelListing(attackedKey);
 		} else if (attackedFunction == FunctionNames.PURCHASE) {
 			// Attempt to reenter purchase function
 			if (address(lmaNFTMarketplace).balance >= 1 ether) {
@@ -91,11 +88,7 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 			"ERC721: caller is not token owner or approved"
 		);
 
-		if (attackedFunction == FunctionNames.CREATE_LISTING) {
-			// Attemp to reenter updateListingPrice function. Values are not relevant so we set all to 0
-			_createListing(tokenId, 0, 0, 0);
-			attackedFunction = FunctionNames.NONE;
-		} else if (attackedFunction == FunctionNames.CREATE_AUCTION) {
+		if (attackedFunction == FunctionNames.CREATE_AUCTION) {
 			// Attemp to reenter createAuction function. We don't care about the parameters so we can set to 0
 			lmaNFTMarketplace.createAuction(IERC721(this), tokenId, 0, 0, 0);
 			attackedFunction = FunctionNames.NONE;
@@ -146,42 +139,6 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 			startTimestamp,
 			endTimestamp
 		);
-	}
-
-	function attackCancelListing(
-		uint tokenId,
-		uint price,
-		uint startTimestamp,
-		uint endTimestamp
-	) external {
-		// Approve the marketplace before creating the listing
-		approve(address(lmaNFTMarketplace), tokenId);
-
-		// Create the listing that will be used to attacked cancelListing function
-		_createListing(tokenId, price, startTimestamp, endTimestamp);
-		// calculate and key the listing key that will be attacked
-		attackedKey = keccak256(abi.encodePacked(address(this), tokenId));
-		// set the selector of the function that we want to attack
-		//attackedFunctionSelector = bytes4(keccak256(bytes("cancelListing(bytes32)")));
-		attackedFunction = FunctionNames.CANCEL_LISTING;
-		// Call cancelListing for the first time
-		lmaNFTMarketplace.cancelListing(attackedKey);
-	}
-
-	function attackCreateListing(
-		uint tokenId,
-		uint price,
-		uint startTimestamp,
-		uint endTimestamp
-	) external {
-		// Approve the marketplace before creating the listing
-		approve(address(lmaNFTMarketplace), tokenId);
-		// Now we set the attackedFunction so we can reenter createListing function
-		attackedFunction = FunctionNames.CREATE_LISTING;
-		// calculate the listing key that will be attacked
-		attackedKey = keccak256(abi.encodePacked(address(this), tokenId));
-		// Create the listing that will be used to attacked cancelListing function
-		_createListing(tokenId, price, startTimestamp, endTimestamp);
 	}
 
 	// Attack auctions

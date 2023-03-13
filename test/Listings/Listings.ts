@@ -8,7 +8,7 @@ import {
 	NFTMarketplace__factory,
 	NFTAttacker,
 	NFTAttacker__factory,
-} from "../typechain-types";
+} from "../../typechain-types";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
 import { BigNumber } from "@ethersproject/bignumber";
@@ -246,10 +246,6 @@ describe("NFTMarketplace", function () {
 				expect(retrievedListing1.cancelled).to.be.false;
 				expect(retrievedListing1.startTimestamp).to.equal(listing1.startTimestamp);
 				expect(retrievedListing1.endTimestamp).to.equal(listing1.endTimestamp);
-
-				// Validate that the MarketPlace now owns the nft
-				// TODO
-				expect(await marketplaceDataForListing.testCarsNFT.ownerOf(listing1.tokenId)).to.equal(marketplaceDataForListing.nftMarketplace.address);
 			});
 
 			it("Should not create a new listing if price is zero", async function () {
@@ -417,24 +413,6 @@ describe("NFTMarketplace", function () {
 							)
 					).to.emit(marketplaceDataForListing.nftMarketplace, "ListingCreated");
 				});
-
-				it("Should not allow to reenter createListing function", async function () {
-					const attackerListing: Listing = marketplaceDataForListing.attackerNFTListing;
-	
-					// Lister approves all its NFTs to NFTAttacker
-					await marketplaceDataForListing.nftAttacker.connect(marketplaceDataForListing.nftLister).setApprovalForAll(marketplaceDataForListing.nftAttacker.address, true);
-	
-					await expect(
-						marketplaceDataForListing.nftAttacker
-							.connect(marketplaceDataForListing.nftLister)
-							.attackCreateListing(
-								attackerListing.tokenId,
-								attackerListing.price,
-								attackerListing.startTimestamp,
-								attackerListing.endTimestamp
-							)
-					).to.be.revertedWith("ReentrancyGuard: reentrant call");
-				});
 			});
 		});
 
@@ -480,9 +458,18 @@ describe("NFTMarketplace", function () {
 				const listing = await marketplaceDataForListing.nftMarketplace.listings(
 					listing1.listingKey
 				);
-				expect(listing.cancelled).to.be.true;
+				// Given the listing was deleted all the attributes should be set to their default value
+				expect(listing.tokenId).to.equal(ethers.constants.Zero);
+				expect(listing.seller).to.equal(ethers.constants.AddressZero);
+				expect(listing.buyer).to.equal(ethers.constants.AddressZero);
+				expect(listing.price).to.equal(ethers.constants.Zero);
+				expect(listing.sold).to.be.false;
+				expect(listing.cancelled).to.be.false;
+				expect(listing.startTimestamp).to.equal(ethers.constants.Zero);
+				expect(listing.endTimestamp).to.equal(ethers.constants.Zero);	
+				
 
-				// Check that the NFT has been transferred back to the seller
+				// Check that the seller is still the owner of the NFT
 				expect(
 					await marketplaceDataForListing.testCarsNFT.ownerOf(listing1.tokenId)
 				).to.equal(listing1.seller.address);
@@ -499,7 +486,7 @@ describe("NFTMarketplace", function () {
 					marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
 						.cancelListing(listing1.listingKey)
-				).to.be.revertedWith("Listing is already cancelled");
+				).to.be.revertedWith("Not a valid listing");
 			});
 
 			it("Should revert if the listing has already ended", async function () {
@@ -521,24 +508,6 @@ describe("NFTMarketplace", function () {
 						.connect(marketplaceDataForListing.nftBuyer)
 						.cancelListing(listing1.listingKey)
 				).to.be.revertedWith("Not the listing seller");
-			});
-
-			it("Should not allow to reenter cancelListing function", async function () {
-				const attackerListing: Listing = marketplaceDataForListing.attackerNFTListing;
-
-				// Lister approves all its NFTs to NFTAttacker
-				await marketplaceDataForListing.nftAttacker.connect(marketplaceDataForListing.nftLister).setApprovalForAll(marketplaceDataForListing.nftAttacker.address, true);
-
-				await expect(
-					marketplaceDataForListing.nftAttacker
-						.connect(marketplaceDataForListing.nftLister)
-						.attackCancelListing(
-							attackerListing.tokenId,
-							attackerListing.price,
-							attackerListing.startTimestamp,
-							attackerListing.endTimestamp
-						)
-				).to.be.revertedWith("ReentrancyGuard: reentrant call");
 			});
 		});
 
@@ -611,7 +580,7 @@ describe("NFTMarketplace", function () {
 					marketplaceDataForListing.nftMarketplace
 						.connect(listing1.seller)
 						.updateListingPrice(listing1.listingKey, newPrice)
-				).to.be.revertedWith("Listing is already cancelled");
+				).to.be.revertedWith("Not a valid listing");
 			});
 
 			it("Should revert if the listing is already ended", async function () {
@@ -714,7 +683,7 @@ describe("NFTMarketplace", function () {
 						.purchase(listing1.listingKey, {
 							value: listing1.price,
 						})
-				).to.be.revertedWith("Listing is already cancelled");
+				).to.be.revertedWith("Not a valid listing");
 			});
 
 			it("Should not allow a buyer to purchase a listing with insufficient funds", async function () {
