@@ -272,7 +272,7 @@ describe("NFTMarketplace", function () {
 			it("Should not allow a bidder to withdraw their bid if the auction is still active", async function () {
 				// Withdraw bidder1's bid
 				await expect(
-					marketplaceDataForWithdrawBids.nftMarketplace.withDrawBid(
+					marketplaceDataForWithdrawBids.nftMarketplace.withdrawBid(
 						openAuction.auctionKey
 					)
 				).to.be.revertedWith("Auction is still active");
@@ -283,7 +283,7 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForWithdrawBids.nftMarketplace
 						.connect(marketplaceDataForWithdrawBids.nonBidder)
-						.withDrawBid(endedAuction.auctionKey)
+						.withdrawBid(endedAuction.auctionKey)
 				).to.be.revertedWith("No funds to withdraw");
 			});
 
@@ -301,7 +301,7 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForWithdrawBids.nftMarketplace
 						.connect(marketplaceDataForWithdrawBids.nftBidder2)
-						.withDrawBid(cancelledAuction.auctionKey)
+						.withdrawBid(cancelledAuction.auctionKey)
 				)
 					.to.emit(marketplaceDataForWithdrawBids.nftMarketplace, "BidWithdrawn")
 					.withArgs(
@@ -338,7 +338,7 @@ describe("NFTMarketplace", function () {
 				await expect(
 					marketplaceDataForWithdrawBids.nftMarketplace
 						.connect(marketplaceDataForWithdrawBids.nftBidder)
-						.withDrawBid(endedAuction.auctionKey)
+						.withdrawBid(endedAuction.auctionKey)
 				)
 					.to.emit(marketplaceDataForWithdrawBids.nftMarketplace, "BidWithdrawn")
 					.withArgs(
