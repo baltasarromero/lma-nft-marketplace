@@ -29,12 +29,7 @@ import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 */
 import "../interfaces/INFTMarketplace.sol";
 
-contract NFTMarketplace is
-	Ownable,
-	ReentrancyGuard,
-	ERC721Holder,
-	INFTMarketplace
-{
+contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketplace {
 	// State Variables
 	using Counters for Counters.Counter;
 	// Listing Data
@@ -64,23 +59,22 @@ contract NFTMarketplace is
 	/*
         Also implicitly validates that the NFT address and token actually exists
     */
-	modifier onlyNFTOwner(
+	modifier onlyNFTOwnerOrApprovedForAll(
 		IERC721 nft,
 		uint tokenId,
 		address senderAddress
 	) {
+		address tokenOwner = nft.ownerOf(tokenId);
+
 		require(
-			nft.ownerOf(tokenId) == msg.sender,
-			"Must be the owner of the NFT to list in the marketplace"
+			tokenOwner == msg.sender || nft.isApprovedForAll(tokenOwner, msg.sender),
+			"Must be the owner or approved for all to list in the marketplace"
 		);
 		_;
 	}
 
 	modifier onlyValidTimestamps(uint start, uint end) {
-		require(
-			(start > 0 && end > block.timestamp && start < end),
-			"Invalid timestamps"
-		);
+		require((start > 0 && end > block.timestamp && start < end), "Invalid timestamps");
 		_;
 	}
 
@@ -102,34 +96,22 @@ contract NFTMarketplace is
 	}
 
 	modifier onlyBeforeListingEnd(bytes32 listingKey) {
-		require(
-			block.timestamp < listings[listingKey].endTimestamp,
-			"Listing has ended"
-		);
+		require(block.timestamp < listings[listingKey].endTimestamp, "Listing has ended");
 		_;
 	}
 
 	modifier onlyListingNotCancelled(bytes32 listingKey) {
-		require(
-			listings[listingKey].cancelled == false,
-			"Listing is already cancelled"
-		);
+		require(listings[listingKey].cancelled == false, "Listing is already cancelled");
 		_;
 	}
 
 	modifier onlyNotListingSeller(bytes32 listingKey) {
-		require(
-			msg.sender != listings[listingKey].seller,
-			"Seller can't call this function"
-		);
+		require(msg.sender != listings[listingKey].seller, "Seller can't call this function");
 		_;
 	}
 
 	modifier onlyListingSeller(bytes32 listingKey) {
-		require(
-			msg.sender == listings[listingKey].seller,
-			"Not the listing seller"
-		);
+		require(msg.sender == listings[listingKey].seller, "Not the listing seller");
 		_;
 	}
 
@@ -143,47 +125,32 @@ contract NFTMarketplace is
 	}
 
 	modifier onlyBeforeAuctionEnd(bytes32 auctionKey) {
-		require(
-			block.timestamp < auctions[auctionKey].endTimestamp,
-			"Auction has ended"
-		);
+		require(block.timestamp < auctions[auctionKey].endTimestamp, "Auction has ended");
 		_;
 	}
 
 	modifier onlyAfterAuctionEndTime(bytes32 auctionKey) {
-		require(
-			block.timestamp > auctions[auctionKey].endTimestamp,
-			"Haven't reached end time"
-		);
+		require(block.timestamp > auctions[auctionKey].endTimestamp, "Haven't reached end time");
 		_;
 	}
 
 	modifier onlyAuctionNotCancelled(bytes32 auctionKey) {
-		require(
-			auctions[auctionKey].cancelled == false,
-			"Auction is already cancelled"
-		);
+		require(auctions[auctionKey].cancelled == false, "Auction is already cancelled");
 		_;
 	}
 
 	modifier onlyAuctionNotEnded(bytes32 auctionKey) {
-		require(! auctions[auctionKey].ended, "Auction already ended");
+		require(!auctions[auctionKey].ended, "Auction already ended");
 		_;
 	}
 
 	modifier onlyNotAuctionSeller(bytes32 auctionKey) {
-		require(
-			msg.sender != auctions[auctionKey].seller,
-			"Seller can't call this function"
-		);
+		require(msg.sender != auctions[auctionKey].seller, "Seller can't call this function");
 		_;
 	}
 
 	modifier onlyAuctionSeller(bytes32 auctionKey) {
-		require(
-			msg.sender == auctions[auctionKey].seller,
-			"Not the auction seller"
-		);
+		require(msg.sender == auctions[auctionKey].seller, "Not the auction seller");
 		_;
 	}
 
@@ -217,17 +184,13 @@ contract NFTMarketplace is
 		return keccak256(abi.encodePacked(address(nft), tokenId));
 	}
 
-	function saveListing(
+	function _saveListing(
 		IERC721 nft,
 		uint tokenId,
 		uint price,
 		uint startTimestamp,
 		uint endTimestamp
-	)
-		internal
-		nonZeroPrice(price)
-		onlyValidTimestamps(startTimestamp, endTimestamp)
-	{
+	) internal nonZeroPrice(price) onlyValidTimestamps(startTimestamp, endTimestamp) {
 		// Increment listings count
 		listingsCount.increment();
 
@@ -247,6 +210,12 @@ contract NFTMarketplace is
 		listings[getKey(nft, tokenId)] = listing;
 	}
 
+	function _transferNFTToMarketplace(IERC721 nft, uint tokenId) internal {
+		address tokenOwner = nft.ownerOf(tokenId);
+		// Transfer the NFT to the MarketPlace
+		nft.safeTransferFrom(tokenOwner, address(this), tokenId);
+	}
+
 	// Listings
 	function createListing(
 		IERC721 nft,
@@ -258,23 +227,14 @@ contract NFTMarketplace is
 		external
 		nonReentrant
 		notInAuctionOrListing(nft, tokenId)
-		onlyNFTOwner(nft, tokenId, msg.sender)
+		onlyNFTOwnerOrApprovedForAll(nft, tokenId, msg.sender)
 		onlyApprovedNFTs(nft, tokenId)
 	{
-		saveListing(nft, tokenId, price, startTimestamp, endTimestamp);
+		_saveListing(nft, tokenId, price, startTimestamp, endTimestamp);
 
-		// TODO try if instead of transfer it's possigle do approval here or permit and then just transfer on sell
-		// Transfer the NFT to the MarketPlace
-		IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
+		_transferNFTToMarketplace(nft, tokenId);
 
-		emit ListingCreated(
-			address(nft),
-			tokenId,
-			msg.sender,
-			price,
-			startTimestamp,
-			endTimestamp
-		);
+		emit ListingCreated(address(nft), tokenId, msg.sender, price, startTimestamp, endTimestamp);
 	}
 
 	function cancelListing(
@@ -291,7 +251,7 @@ contract NFTMarketplace is
 		listingToBeCancelled.cancelled = true;
 
 		// Tranfer the token back to the onwer
-		IERC721(listingToBeCancelled.nft).safeTransferFrom(
+		listingToBeCancelled.nft.safeTransferFrom(
 			address(this),
 			listingToBeCancelled.seller,
 			listingToBeCancelled.tokenId
@@ -311,7 +271,6 @@ contract NFTMarketplace is
 		uint newPrice
 	)
 		external
-		nonReentrant
 		onlyListingSeller(listingKey)
 		onlyListingNotCancelled(listingKey)
 		onlyBeforeListingEnd(listingKey)
@@ -319,10 +278,7 @@ contract NFTMarketplace is
 		Listing storage listingToUpdate = listings[listingKey];
 		uint oldPrice = uint(listingToUpdate.price);
 		// Check if the new price is different from the current price
-		require(
-			newPrice != oldPrice,
-			"New price must be different from current price"
-		);
+		require(newPrice != oldPrice, "New price must be different from current price");
 
 		// Update the listing price
 		listingToUpdate.price = newPrice;
@@ -351,10 +307,7 @@ contract NFTMarketplace is
 		Listing memory listingToPurchase = listings[listingKey];
 
 		// Ensure that the user has sent enough ether to purchase the NFT
-		require(
-			msg.value >= listingToPurchase.price,
-			"Insufficient funds to purchase NFT"
-		);
+		require(msg.value >= listingToPurchase.price, "Insufficient funds to purchase NFT");
 
 		// Mark the listing as sold
 		listings[listingKey].sold = true;
@@ -365,8 +318,6 @@ contract NFTMarketplace is
 			msg.sender,
 			listingToPurchase.tokenId
 		);
-
-		// TODO Implement marketplace fee logic
 
 		// Transfer the ether to the seller
 		payable(listingToPurchase.seller).transfer(msg.value);
@@ -383,23 +334,19 @@ contract NFTMarketplace is
 	}
 
 	// Auctions
-	function saveAuction(
+	function _saveAuction(
 		IERC721 nft,
 		uint tokenId,
 		uint floorPrice,
 		uint startTimestamp,
 		uint endTimestamp
-	)
-		internal
-		nonZeroPrice(floorPrice)
-		onlyValidTimestamps(startTimestamp, endTimestamp)
-	{
+	) internal nonZeroPrice(floorPrice) onlyValidTimestamps(startTimestamp, endTimestamp) {
 		// Increment auctions count
 		auctionsCount.increment();
 		// Add the new listing to the mapping of listings
 		Auction storage auction = auctions[getKey(nft, tokenId)];
 		// Set the expected attributes
-		auction.nft = IERC721(nft);
+		auction.nft = nft;
 		auction.tokenId = tokenId;
 		auction.seller = payable(msg.sender);
 		auction.floorPrice = floorPrice;
@@ -417,14 +364,13 @@ contract NFTMarketplace is
 		external
 		nonReentrant
 		notInAuctionOrListing(nft, tokenId)
-		onlyNFTOwner(IERC721(nft), tokenId, msg.sender)
+		onlyNFTOwnerOrApprovedForAll(IERC721(nft), tokenId, msg.sender)
 		onlyApprovedNFTs(IERC721(nft), tokenId)
 	{
-		saveAuction(nft, tokenId, floorPrice, startTimestamp, endTimestamp);
+		_saveAuction(nft, tokenId, floorPrice, startTimestamp, endTimestamp);
 
-		// TODO try if instead of transfer it's possible do approval here or permit and then just transfer on sell
-		// Transfer the NFT to the MarketPlace
-		IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
+		_transferNFTToMarketplace(nft, tokenId);
+
 		emit AuctionCreated(
 			address(nft),
 			tokenId,
@@ -440,7 +386,6 @@ contract NFTMarketplace is
 	)
 		external
 		payable
-		nonReentrant
 		onlyNotAuctionSeller(auctionKey)
 		onlyAuctionNotCancelled(auctionKey)
 		onlyAfterAuctionStart(auctionKey)
@@ -454,16 +399,10 @@ contract NFTMarketplace is
 		uint256 newBid = auction.bids[msg.sender] + msg.value;
 
 		// Check if the bid value is greater than the floor price
-		require(
-			newBid >= auction.floorPrice,
-			"Bid value should be higher than the floor price"
-		);
+		require(newBid >= auction.floorPrice, "Bid value should be higher than the floor price");
 
 		// Check if the bid value is greater than the current highest bid
-		require(
-			newBid > currentHighestBid,
-			"Bid should be higher than the current highest bid"
-		);
+		require(newBid > currentHighestBid, "Bid should be higher than the current highest bid");
 
 		// Set the new highest bid
 		auction.highestBid = newBid;
@@ -496,7 +435,7 @@ contract NFTMarketplace is
 		auctionToBeCancelled.highestBidder = address(0);
 
 		// Tranfer the token back to the onwer
-		IERC721(auctionToBeCancelled.nft).safeTransferFrom(
+		auctionToBeCancelled.nft.safeTransferFrom(
 			address(this),
 			auctionToBeCancelled.seller,
 			auctionToBeCancelled.tokenId
@@ -522,11 +461,9 @@ contract NFTMarketplace is
 		onlyAuctionNotEnded(auctionKey)
 	{
 		Auction storage auction = auctions[auctionKey];
-		
+
 		// End the auction
 		auction.ended = true;
-
-		// TODO implement Marketplace fee logic
 
 		// If there's a winner of the auction
 		if (auction.highestBidder != address(0)) {
@@ -534,21 +471,15 @@ contract NFTMarketplace is
 			auction.bids[auction.highestBidder] = 0;
 
 			// Transfer the NFT to the winner
-			auction.nft.safeTransferFrom(
-				address(this),
-				auction.highestBidder,
-				auction.tokenId
-			);
+			auction.nft.safeTransferFrom(address(this), auction.highestBidder, auction.tokenId);
 
 			// Transfer the bidAmount to the seller
-			payable(auction.seller).transfer(auction.highestBid);
+			(bool sent, ) = payable(auction.seller).call{value: auction.highestBid}("");
+
+			require(sent, "Failed to pay the seller");
 		} else {
 			// If there is no winner. Transfer the NFT back to the seller
-			auction.nft.safeTransferFrom(
-				address(this),
-				auction.seller,
-				auction.tokenId
-			);
+			auction.nft.safeTransferFrom(address(this), auction.seller, auction.tokenId);
 		}
 
 		emit AuctionFinished(
@@ -561,7 +492,7 @@ contract NFTMarketplace is
 		);
 	}
 
-	function withDrawBid(
+	function withdrawBid(
 		bytes32 auctionKey
 	) external nonReentrant onlyAuctionEndedOrCancelled(auctionKey) {
 		Auction storage auction = auctions[auctionKey];
@@ -572,9 +503,15 @@ contract NFTMarketplace is
 		uint userBid = auction.bids[msg.sender];
 		require(userBid > 0, "No funds to withdraw");
 
-        auction.bids[msg.sender] = 0;
-        payable(msg.sender).transfer(userBid);
+		auction.bids[msg.sender] = 0;
+		(bool sent, ) = payable(msg.sender).call{value: userBid}("");
 
-   		emit BidWithdrawn(msg.sender, address(auction.nft), auction.tokenId, userBid, block.timestamp);
+		emit BidWithdrawn(
+			msg.sender,
+			address(auction.nft),
+			auction.tokenId,
+			userBid,
+			block.timestamp
+		);
 	}
 }

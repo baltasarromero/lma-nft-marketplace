@@ -151,5 +151,5 @@ interface INFTMarketplace {
 
 	function endAuction(bytes32 auctionKey) external;
 
-	function withDrawBid(bytes32 auctionKey) external;
+	function withdrawBid(bytes32 auctionKey) external;
 }

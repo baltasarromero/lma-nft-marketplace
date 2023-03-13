@@ -6,6 +6,8 @@ import {
 	TestCarsNFT,
 	TestCarsNFT__factory,
 	NFTMarketplace__factory,
+	NFTAttacker,
+	NFTAttacker__factory,
 } from "../../typechain-types";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
@@ -17,12 +19,14 @@ describe("NFTMarketplace", function () {
 		nftMarketplace: NFTMarketplace;
 		marketPlaceOwner: SignerWithAddress;
 		feeDestinationAccount: SignerWithAddress;
-		nftSeller: SignerWithAddress;
+		nftLister: SignerWithAddress;
 		nftBidder: SignerWithAddress;
 		nftBidder2: SignerWithAddress;
 		testCarsNFT: TestCarsNFT;
+		nftAttacker: NFTAttacker;
 		auctionWithoutBids: Auction;
 		auctionWithBids: Auction;
+		attackerNFTAuction: Auction;
 	};
 
 	type Auction = {
@@ -52,7 +56,7 @@ describe("NFTMarketplace", function () {
 
 	async function endAuctionsFixture(): Promise<EndAuctionsFixtureData> {
 		// Contracts are deployed using the first signer/account by default
-		const [marketPlaceOwner, feeDestinationAccount, nftAuctioneer, nftBidder, nftBidder2] =
+		const [marketPlaceOwner, feeDestinationAccount, nftLister, nftBidder, nftBidder2] =
 			await ethers.getSigners();
 
 		const NFTMarketplace: NFTMarketplace__factory = await ethers.getContractFactory(
@@ -66,26 +70,34 @@ describe("NFTMarketplace", function () {
 		const TestCarsNFT: TestCarsNFT__factory = await ethers.getContractFactory("TestCarsNFT");
 		const testCarsNFT: TestCarsNFT = await TestCarsNFT.deploy();
 
-		await testCarsNFT.safeMint(CAR_1_METADATA_URI, nftAuctioneer.address);
+		await testCarsNFT.safeMint(CAR_1_METADATA_URI, nftLister.address);
 		const tokenId1: number = 1;
 
 		// The seller needs to approve the contract before creating the auction
-		await testCarsNFT.connect(nftAuctioneer).approve(nftMarketplace.address, tokenId1);
+		await testCarsNFT.connect(nftLister).approve(nftMarketplace.address, tokenId1);
 
 		// Mint 2nd Token
 		// Mint first NFT to be listed
-		await testCarsNFT.safeMint(CAR_2_METADATA_URI, nftAuctioneer.address);
+		await testCarsNFT.safeMint(CAR_2_METADATA_URI, nftLister.address);
 		const tokenId2: number = 2;
 
 		// The seller needs to approve the contract before creating the auction
-		await testCarsNFT.connect(nftAuctioneer).approve(nftMarketplace.address, tokenId2);
+		await testCarsNFT.connect(nftLister).approve(nftMarketplace.address, tokenId2);
 
-		// Mint another token but don't approve it
 		// Mint third NFT to be listed
-		await testCarsNFT.safeMint(CAR_3_METADATA_URI, nftAuctioneer.address);
+		await testCarsNFT.safeMint(CAR_3_METADATA_URI, nftLister.address);
 		const tokenId3: number = 3;
 		// The seller needs to approve the contract before creating the auction
-		await testCarsNFT.connect(nftAuctioneer).approve(nftMarketplace.address, tokenId3);
+		await testCarsNFT.connect(nftLister).approve(nftMarketplace.address, tokenId3);
+
+		
+		// Deploy AttackerNFT contract
+		const NFTAttacker: NFTAttacker__factory = await ethers.getContractFactory("NFTAttacker");
+		const nftAttacker: NFTAttacker = await NFTAttacker.deploy(
+			"NFTAttacker",
+			"NFTA",
+			nftMarketplace.address
+		);
 
 		const auctionFloorPrice: BigNumber = ethers.utils.parseEther("1");
 		// Define listing timestamps
@@ -105,7 +117,7 @@ describe("NFTMarketplace", function () {
 			auctionKey: auction1Key,
 			nft: testCarsNFT,
 			tokenId: tokenId1,
-			seller: nftAuctioneer,
+			seller: nftLister,
 			bidder: undefined,
 			price: auctionFloorPrice,
 			fundsByUser: new Map<SignerWithAddress, BigNumber>(),
@@ -132,7 +144,7 @@ describe("NFTMarketplace", function () {
 			auctionKey: auctionWithBidsKey,
 			nft: testCarsNFT,
 			tokenId: tokenId3,
-			seller: nftAuctioneer,
+			seller: nftLister,
 			bidder: undefined,
 			fundsByUser: new Map<SignerWithAddress, BigNumber>(),
 			highestBidder: undefined,
@@ -183,16 +195,42 @@ describe("NFTMarketplace", function () {
 		// Highest bid is 1.7 ETH
 		auctionWithBids.highestBid = bid2Amount;
 
+		// Attacker auction
+		// Mint an attacker NFT
+		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftLister.address);
+		const attackerTokenId: number = 1;
+
+		const attackerAuctionKey: BytesLike = ethers.utils.solidityKeccak256(
+			["address", "uint256"],
+			[nftAttacker.address, 1]
+		);
+
+		const attackerNFTAuction: Auction = {
+			auctionKey: attackerAuctionKey,
+			nft: nftAttacker,
+			tokenId: attackerTokenId,
+			seller: nftLister,
+			bidder: undefined,
+			fundsByUser: new Map<SignerWithAddress, BigNumber>(),
+			highestBidder: undefined,
+			highestBid: BigNumber.from(0),
+			price: auctionFloorPrice,
+			startTimestamp: auctionStartTimestamp,
+			endTimestamp: auctionEndTimestamp,
+		};
+
 		return {
 			nftMarketplace,
 			marketPlaceOwner,
 			feeDestinationAccount,
-			nftSeller: nftAuctioneer,
+			nftLister: nftLister,
 			nftBidder: nftBidder,
 			nftBidder2: nftBidder2,
 			testCarsNFT,
+			nftAttacker,
 			auctionWithoutBids: auctionWithoutBids,
 			auctionWithBids: auctionWithBids,
+			attackerNFTAuction,
 		};
 	}
 
@@ -289,7 +327,7 @@ describe("NFTMarketplace", function () {
 				// Seller tries to end the auction
 				await expect(
 					endAuctionsTestData.nftMarketplace
-						.connect(endAuctionsTestData.nftSeller)
+						.connect(endAuctionsTestData.nftLister)
 						.endAuction(auctionWithoutBids.auctionKey)
 				).to.be.revertedWith("Haven't reached end time");
 			});
@@ -332,6 +370,37 @@ describe("NFTMarketplace", function () {
 						.connect(auctionWithoutBids.seller)
 						.endAuction(auctionWithoutBids.auctionKey)
 				).to.be.revertedWith("Auction already ended");
+			});
+
+			it("Should not allow to reenter endAuction function", async function () {
+				const attackerAuction: Auction = endAuctionsTestData.attackerNFTAuction;
+
+				// Lister approves all its NFTs to NFTAttacker
+				await endAuctionsTestData.nftAttacker
+					.connect(endAuctionsTestData.nftLister)
+					.setApprovalForAll(endAuctionsTestData.nftAttacker.address, true);
+
+			    // Create the auction using the attacker contract
+				await endAuctionsTestData.nftAttacker
+				.connect(endAuctionsTestData.nftLister)
+				.approveAndCreateAuction(
+					attackerAuction.tokenId,
+					attackerAuction.price,
+					attackerAuction.startTimestamp,
+					attackerAuction.endTimestamp
+				);
+			
+				
+				// After creating the auction advance the time so we can end the auction
+				time.increaseTo(attackerAuction.endTimestamp.add(1));
+
+				await expect(
+					endAuctionsTestData.nftAttacker
+						.connect(endAuctionsTestData.nftLister)
+						.attackEndAuction(
+							attackerAuction.tokenId
+						)
+				).to.be.revertedWith("ReentrancyGuard: reentrant call");
 			});
 		});
 	});
