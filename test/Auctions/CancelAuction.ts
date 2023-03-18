@@ -12,6 +12,7 @@ import {
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
 import { BigNumber } from "@ethersproject/bignumber";
+import hre from "hardhat";
 
 describe("NFTMarketplace", function () {
 	// Types definition
@@ -143,10 +144,16 @@ describe("NFTMarketplace", function () {
 		};
 
 		// Attacker auction
+		// Send ether to the attacker contract so it can perform the attack
+		await nftBuyer.sendTransaction({
+			to: nftAttacker.address,
+			value: ethers.utils.parseEther("10.0"), // Sends exactly 10.0 ether
+		});
+
 		// Mint an attacker NFT
-		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftLister.address);
+		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftAttacker.address);
 		const attackerTokenId: number = 1;
-		
+
 		const attackerAuctionKey: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[nftAttacker.address, 1]
@@ -172,7 +179,7 @@ describe("NFTMarketplace", function () {
 			nftAttacker,
 			auction1: token1Auction,
 			auction2: token3Auction,
-			attackerNFTAuction
+			attackerNFTAuction,
 		};
 	}
 
@@ -253,14 +260,20 @@ describe("NFTMarketplace", function () {
 			it("Should not allow to reenter cancelAuction function", async function () {
 				const attackerAuction: Auction = cancelAuctionsFixture.attackerNFTAuction;
 
-				// Lister approves all its NFTs to NFTAttacker
-				await cancelAuctionsFixture.nftAttacker
-					.connect(cancelAuctionsFixture.nftLister)
-					.setApprovalForAll(cancelAuctionsFixture.nftAttacker.address, true);
+				const nftAttackerContractAddress: string =
+					cancelAuctionsFixture.nftAttacker.address;
+
+				// Impersonate the attacker contract so we can perform the attack
+				await hre.network.provider.request({
+					method: "hardhat_impersonateAccount",
+					params: [nftAttackerContractAddress],
+				});
+
+				const attackerSigner = await ethers.getSigner(nftAttackerContractAddress);
 
 				await expect(
 					cancelAuctionsFixture.nftAttacker
-						.connect(cancelAuctionsFixture.nftLister)
+						.connect(attackerSigner)
 						.attackCancelAuction(
 							attackerAuction.tokenId,
 							attackerAuction.price,

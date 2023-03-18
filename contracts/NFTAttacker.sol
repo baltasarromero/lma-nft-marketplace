@@ -18,7 +18,7 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 	using Counters for Counters.Counter;
 	Counters.Counter private _tokenIdCounter;
 	NFTMarketplace public lmaNFTMarketplace;
-	address public attackedNFT;
+	IERC721 public attackedNFT;
 	uint public attackedTokenId;
 	bytes32 public attackedKey;
 	uint public attackerBalance;
@@ -58,7 +58,7 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 		} else if (attackedFunction == FunctionNames.PURCHASE) {
 			// Attempt to reenter purchase function
 			if (address(lmaNFTMarketplace).balance >= 1 ether) {
-				lmaNFTMarketplace.purchase{ value: attackerBalance }(attackedKey);
+				lmaNFTMarketplace.purchase{ value: attackerBalance }(attackedNFT, attackedTokenId);
 			}
 		} else if (attackedFunction == FunctionNames.CANCEL_AUCTION) {
 			// Attempt to reenter cancelAuction function
@@ -114,30 +114,27 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 
 	// Reentrancy attack related functions
 	// Attack listings
-	function attackPurchase(bytes32 attackedListing) external payable {
+	function attackPurchase(IERC721 nft, uint256 tokenId) external payable {
 		require(msg.value >= 2 ether);
 		// Set the function that we want to attack
-		attackedKey = attackedListing;
+		attackedNFT = nft;
+		attackedTokenId = tokenId;
 		attackedFunction = FunctionNames.PURCHASE;
 		attackerBalance = msg.value - 2 ether;
-		lmaNFTMarketplace.purchase{ value: 2 ether }(attackedKey);
+		lmaNFTMarketplace.purchase{ value: 2 ether }(nft, tokenId);
 	}
 
 	// List a token using the attacker contract. This is necessary in order to attack cancel listing token
-	function _createListing(
+	/* function _createListing(
 		uint tokenId,
-		uint price,
-		uint startTimestamp,
-		uint endTimestamp
+		uint price
 	) internal {
 		lmaNFTMarketplace.createListing(
 			IERC721(this),
 			tokenId,
-			price,
-			startTimestamp,
-			endTimestamp
+			price
 		);
-	}
+	} */
 
 	// Attack auctions
 	// List a token using the attacker contract. This is necessary in order to attack cancel listing token
@@ -178,7 +175,7 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 		uint startTimestamp,
 		uint endTimestamp
 	) external {
-		// Create the listing that will be used to attacked cancelListing function
+		// Create the listing that will be used to attack cancelListing function
 		approveAndCreateAuction(tokenId, price, startTimestamp, endTimestamp);
 		// calculate and key the listing key that will be attacked
 		attackedKey = keccak256(abi.encodePacked(address(this), tokenId));
@@ -196,4 +193,9 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 		// Call endAuction for the first time
 		lmaNFTMarketplace.endAuction(attackedKey);
 	}
+
+	/// @dev allow contract to receive ether
+	receive() external payable {
+
+    }
 }

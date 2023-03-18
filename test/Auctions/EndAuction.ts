@@ -12,6 +12,7 @@ import {
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
 import { BigNumber } from "@ethersproject/bignumber";
+import hre from "hardhat";
 
 describe("NFTMarketplace", function () {
 	// Types definition
@@ -90,7 +91,6 @@ describe("NFTMarketplace", function () {
 		// The seller needs to approve the contract before creating the auction
 		await testCarsNFT.connect(nftLister).approve(nftMarketplace.address, tokenId3);
 
-		
 		// Deploy AttackerNFT contract
 		const NFTAttacker: NFTAttacker__factory = await ethers.getContractFactory("NFTAttacker");
 		const nftAttacker: NFTAttacker = await NFTAttacker.deploy(
@@ -197,7 +197,13 @@ describe("NFTMarketplace", function () {
 
 		// Attacker auction
 		// Mint an attacker NFT
-		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftLister.address);
+		// Send ether to the attacker contract so it can perform the attack
+		await nftBidder.sendTransaction({
+			to: nftAttacker.address,
+			value: ethers.utils.parseEther("10.0"), // Sends exactly 10.0 ether
+		});
+
+		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftAttacker.address);
 		const attackerTokenId: number = 1;
 
 		const attackerAuctionKey: BytesLike = ethers.utils.solidityKeccak256(
@@ -356,7 +362,7 @@ describe("NFTMarketplace", function () {
 			});
 
 			it("Should not allow to end an already ended auction", async function () {
-                // Change time to be past the auction's end
+				// Change time to be past the auction's end
 				time.increaseTo(auctionWithoutBids.endTimestamp.add(1));
 
 				// Cancel the auction
@@ -375,31 +381,33 @@ describe("NFTMarketplace", function () {
 			it("Should not allow to reenter endAuction function", async function () {
 				const attackerAuction: Auction = endAuctionsTestData.attackerNFTAuction;
 
-				// Lister approves all its NFTs to NFTAttacker
-				await endAuctionsTestData.nftAttacker
-					.connect(endAuctionsTestData.nftLister)
-					.setApprovalForAll(endAuctionsTestData.nftAttacker.address, true);
+				const nftAttackerContractAddress: string = endAuctionsTestData.nftAttacker.address;
 
-			    // Create the auction using the attacker contract
+				// Impersonate the attacker contract so we can perform the attack
+				await hre.network.provider.request({
+					method: "hardhat_impersonateAccount",
+					params: [nftAttackerContractAddress],
+				});
+
+				const attackerSigner = await ethers.getSigner(nftAttackerContractAddress);
+
+				// Create the auction using the attacker contract
 				await endAuctionsTestData.nftAttacker
-				.connect(endAuctionsTestData.nftLister)
-				.approveAndCreateAuction(
-					attackerAuction.tokenId,
-					attackerAuction.price,
-					attackerAuction.startTimestamp,
-					attackerAuction.endTimestamp
-				);
-			
-				
+					.connect(attackerSigner)
+					.approveAndCreateAuction(
+						attackerAuction.tokenId,
+						attackerAuction.price,
+						attackerAuction.startTimestamp,
+						attackerAuction.endTimestamp
+					);
+
 				// After creating the auction advance the time so we can end the auction
 				time.increaseTo(attackerAuction.endTimestamp.add(1));
 
 				await expect(
 					endAuctionsTestData.nftAttacker
 						.connect(endAuctionsTestData.nftLister)
-						.attackEndAuction(
-							attackerAuction.tokenId
-						)
+						.attackEndAuction(attackerAuction.tokenId)
 				).to.be.revertedWith("ReentrancyGuard: reentrant call");
 			});
 		});
