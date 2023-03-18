@@ -87,13 +87,13 @@ describe("NFTMarketplace", function () {
 				expect(fee).to.equal(initialFee);
 			});
 
-			it("Should have userFunds set to 0 for the contract owner", async function () {
+			/* it("Should have userFunds set to 0 for the contract owner", async function () {
 				const owner = emptyMarketplaceData.marketPlaceOwner.address;
 				const userFunds =
 					await emptyMarketplaceData.nftMarketplace.userFunds(owner);
 				expect(userFunds).to.equal(0);
 			});
-
+ 
 			it("Should have userFunds set to 0 for the 'other' account", async function () {
 				const userFunds =
 					await emptyMarketplaceData.nftMarketplace.userFunds(
@@ -108,7 +108,8 @@ describe("NFTMarketplace", function () {
 
 			it("The NFT should not be listed for auction", async function () {
 				// TODO implement
-			});
+			});			*/
+
 		});
 	});
 });

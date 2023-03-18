@@ -7,142 +7,127 @@ pragma solidity 0.8.16;
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
 
 interface INFTMarketplace {
-	// State Variables
-	struct Listing {
-		IERC721 nft;
-		uint tokenId;
-		address payable seller;
-		uint price;
-		bool sold;
-		address buyer;
-		uint startTimestamp;
-		uint endTimestamp;
-		bool cancelled;
-	}
-
+	// Structs
 	struct Auction {
 		IERC721 nft;
-		uint tokenId;
+		uint256 tokenId;
 		address payable seller;
-		uint floorPrice;
-		uint sellPrice;
-		mapping(address => uint) bids;
+		uint256 floorPrice;
+		uint256 sellPrice;
+		mapping(address => uint256) bids;
 		address highestBidder;
-		uint highestBid;
+		uint256 highestBid;
 		bool cancelled;
 		bool ended;
-		uint startTimestamp;
-		uint endTimestamp;
+		uint256 startTimestamp;
+		uint256 endTimestamp;
 	}
 
 	// Events
 	// Listings
 	event ListingCreated(
 		address indexed nftAddress,
-		uint indexed tokenId,
+		uint256 indexed tokenId,
 		address seller,
-		uint price,
-		uint startTimestamp,
-		uint endTimestamp
+		uint256 price,
+		uint256 listingTimestamp
 	);
 
 	event Purchase(
 		address indexed nftAddress,
-		uint tokenId,
+		uint256 tokenId,
 		address indexed seller,
 		address indexed buyer,
-		uint price,
-		uint endTimestamp
+		uint256 price,
+		uint256 endTimestamp
 	);
 
 	event ListingPriceUpdated(
 		address indexed nftAddress,
-		uint tokenId,
-		uint oldPrice,
-		uint newPrice,
-		uint timestamp
+		uint256 tokenId,
+		uint256 oldPrice,
+		uint256 newPrice,
+		uint256 timestamp
 	);
 
 	event ListingCancelled(
 		address indexed nftAddress,
-		uint tokenId,
+		uint256 tokenId,
 		address indexed seller,
-		uint cancelTimestamp
+		uint256 cancelTimestamp
 	);
 
 	// Auctions
 	event AuctionCreated(
 		address indexed nftAddress,
-		uint indexed tokenId,
+		uint256 indexed tokenId,
 		address seller,
-		uint floorPrice,
-		uint startTimestamp,
-		uint endTimestamp
+		uint256 floorPrice,
+		uint256 startTimestamp,
+		uint256 endTimestamp
 	);
 
 	event NewHighestBid(
 		address indexed nftAddress,
-		uint tokenId,
+		uint256 tokenId,
 		address indexed bidder,
-		uint bid,
-		uint previousHighestBid,
-		uint timestamp
+		uint256 bid,
+		uint256 previousHighestBid,
+		uint256 timestamp
 	);
 
 	event AuctionCancelled(
 		address indexed nftAddress,
-		uint tokenId,
+		uint256 tokenId,
 		address indexed seller,
-		uint cancelTimestamp
+		uint256 cancelTimestamp
 	);
 
 	event AuctionFinished(
 		address indexed nftAddress,
-		uint tokenId,
-		uint amountId,
+		uint256 tokenId,
+		uint256 amountId,
 		address indexed seller,
 		address indexed buyer,
-		uint endTimestamp
+		uint256 endTimestamp
 	);
 
 	event BidWithdrawn(
 		address indexed bidder,
 		address indexed nftAddress,
-		uint tokenId,
-		uint bid,
-		uint timestamp
+		uint256 tokenId,
+		uint256 bid,
+		uint256 timestamp
 	);
 
 	// Management
-	event FundsClaimed(address indexed user, uint amount, uint timestamp);
+	event FundsClaimed(address indexed user, uint256 amount, uint256 timestamp);
 
 	event FeeAccountUpdated(address previousFeeAccount, address newfeeAcount);
 
-	event FeeAmountUpdated(uint previousFeeAmount, uint newFeeAmount);
+	event FeeAmountUpdated(uint256 previousFeeAmount, uint256 newFeeAmount);
 
 	// Functions definitions
 	// Listings
 	function createListing(
 		IERC721 nft,
-		uint tokenId,
-		uint price,
-		uint startTimestamp,
-		uint endTimestamp
+		uint256 tokenId,
+		uint256 price
 	) external;
 
-	function cancelListing(bytes32 listingKey) external;
+	function cancelListing(IERC721 nft,  uint256 tokenId) external;
 
-	function updateListingPrice(bytes32 listingKey, uint newPrice) external;
+	function updateListingPrice(IERC721 nft, uint256 tokenId, uint256 newPrice) external;
 
-	function purchase(bytes32 listingKey) external payable;
+	function purchase(IERC721 nft, uint256 tokenId) external payable;
 
 	// Audits
 	function createAuction(
 		IERC721 nft,
-		uint tokenId,
-		uint floorPrice,
-		uint startTimestamp,
-		uint endTimestamp
+		uint256 tokenId,
+		uint256 floorPrice,
+		uint256 startTimestamp,
+		uint256 endTimestamp
 	) external;
 
 	function bid(bytes32 auctionKey) external payable;

@@ -12,6 +12,7 @@ import {
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
 import { BigNumber } from "@ethersproject/bignumber";
+import hre from "hardhat";
 
 describe("NFTMarketplace", function () {
 	// Types definition
@@ -132,8 +133,14 @@ describe("NFTMarketplace", function () {
 		};
 
 		// Attacker auction
+		// Send ether to the attacker contract so it can perform the attack
+		await nftBuyer.sendTransaction({
+			to: nftAttacker.address,
+			value: ethers.utils.parseEther("10.0"), // Sends exactly 10.0 ether
+		});
+
 		// Mint an attacker NFT
-		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftLister.address);
+		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftAttacker.address);
 		const attackerTokenId: number = 1;
 
 		const attackerAuctionKey: BytesLike = ethers.utils.solidityKeccak256(
@@ -160,7 +167,7 @@ describe("NFTMarketplace", function () {
 			nftAttacker,
 			token1Auction: token1Auction,
 			token2Auction: token3Auction,
-			attackerNFTAuction
+			attackerNFTAuction,
 		};
 	}
 
@@ -228,7 +235,9 @@ describe("NFTMarketplace", function () {
 							auction1.startTimestamp,
 							auction1.endTimestamp
 						)
-				).to.be.revertedWith("Price must be greater than zero");
+				).to.be.revertedWith(
+					"Invalid price. Needs to be positive and not exceed Max Int valid value."
+				);
 			});
 
 			it("Should not create a new auction if start timestamp is after end timestamp", async function () {
@@ -293,9 +302,7 @@ describe("NFTMarketplace", function () {
 							auction1.startTimestamp,
 							auction1.endTimestamp
 						)
-				).to.be.revertedWith(
-					"Must be the owner or approved for all to list in the marketplace"
-				);
+				).to.be.revertedWith("Not the NFT owner");
 			});
 
 			it("Should not create a new auction if the contract is not approved to transfer the NFT", async function () {
@@ -310,20 +317,28 @@ describe("NFTMarketplace", function () {
 							unapprovedAuction.startTimestamp,
 							unapprovedAuction.endTimestamp
 						)
-				).to.be.revertedWith("Marketplace must be approved to transfer the NFT");
+				).to.be.revertedWith(
+					"Marketplace must be approved or approvedForAll to transfer the NFT"
+				);
 			});
 
 			it("Should not allow to reenter createAuction function", async function () {
 				const attackerAuction: Auction = marketplaceDataForAuction.attackerNFTAuction;
 
-				// Lister approves all its NFTs to NFTAttacker
-				await marketplaceDataForAuction.nftAttacker
-					.connect(marketplaceDataForAuction.nftLister)
-					.setApprovalForAll(marketplaceDataForAuction.nftAttacker.address, true);
+				const nftAttackerContractAddress: string =
+				marketplaceDataForAuction.nftAttacker.address;
+
+				// Impersonate the attacker contract so we can perform the attack
+				await hre.network.provider.request({
+					method: "hardhat_impersonateAccount",
+					params: [nftAttackerContractAddress],
+				});
+
+				const attackerSigner = await ethers.getSigner(nftAttackerContractAddress);
 
 				await expect(
 					marketplaceDataForAuction.nftAttacker
-						.connect(marketplaceDataForAuction.nftLister)
+						.connect(attackerSigner)
 						.attackCreateAuction(
 							attackerAuction.tokenId,
 							attackerAuction.price,
@@ -338,13 +353,7 @@ describe("NFTMarketplace", function () {
 					// Create a listing for the NFT using auction's 1 data
 					await marketplaceDataForAuction.nftMarketplace
 						.connect(auction1.seller)
-						.createListing(
-							auction1.nft.address,
-							auction1.tokenId,
-							auction1.price,
-							auction1.startTimestamp,
-							auction1.endTimestamp
-						);
+						.createListing(auction1.nft.address, auction1.tokenId, auction1.price);
 
 					// Try to create an auction for the same NFT
 					await expect(
