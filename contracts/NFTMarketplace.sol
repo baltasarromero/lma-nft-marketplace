@@ -57,7 +57,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		require((start > 0 && end > block.timestamp && start < end), "Invalid timestamps");
 		_;
 	}
-
 	modifier notNFTOwner(IERC721 nft, uint256 tokenId) {
 		require(msg.sender != nft.ownerOf(tokenId), "NFT owner can't call this function");
 		_;
@@ -230,7 +229,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	) external payable nonReentrant listed(nft, tokenId) notNFTOwner(nft, tokenId) {
 		bytes32 listingKey = getKey(nft, tokenId);
 		int256 listingPrice = listings[listingKey];
-
 		
 		/// @dev Ensure that the user has sent enough ether to purchase the NFT. ListingPrice is a positive value because it's validated by listed modifier 
 		require(msg.value >= uint256(listingPrice), "Insufficient funds to purchase NFT");

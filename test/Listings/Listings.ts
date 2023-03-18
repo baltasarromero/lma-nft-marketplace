@@ -35,6 +35,7 @@ describe("NFTMarketplace", function () {
 		tokenId: number;
 		seller: SignerWithAddress;
 		price: BigNumber
+
 	};
 
 	// Global Variables
@@ -95,7 +96,6 @@ describe("NFTMarketplace", function () {
 		// Define listing price
 		const listingPrice: BigNumber = ethers.utils.parseEther("1");
 
-
 		// Calculate listing key
 		const approvedListingKey: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
@@ -141,7 +141,7 @@ describe("NFTMarketplace", function () {
 		// Mint an attacker NFT
 		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftLister.address);
 		const attackerTokenId: number = 1;
-
+    
 		const attackerListingKey: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[nftAttacker.address, 1]
@@ -178,6 +178,7 @@ describe("NFTMarketplace", function () {
 				marketplaceDataForListing = await loadFixture(
 					deployNFMarketplaceAndMintTokensFixture
 				);
+
 
 				listing1 = marketplaceDataForListing.approvedListing;
 			});
@@ -415,6 +416,7 @@ describe("NFTMarketplace", function () {
 				// Given the listing was deleted all the attributes should be set to their default value
 				expect(listingPrice).to.equal(ethers.constants.Zero);
 
+
 				// Check that the seller is still the owner of the NFT
 				expect(
 					await marketplaceDataForListing.testCarsNFT.ownerOf(listing1.tokenId)
@@ -553,8 +555,6 @@ describe("NFTMarketplace", function () {
 						)
 				).to.be.revertedWith("Invalid price. Needs to be positive and not exceed Max Int valid value.");
 			});
-
-
 		});
 
 		describe("Purchase NFTs", function () {
