@@ -68,12 +68,6 @@ describe("NFTMarketplace", function () {
 				expect(listingsCount).to.equal(0);
 			});
 
-			it("Should have auctionsCount initialized to 0", async function () {
-				const auctionsCount =
-					await emptyMarketplaceData.nftMarketplace.auctionsCount();
-				expect(auctionsCount).to.equal(0);
-			});
-
 			it("Should have feeAccount set to the correct address", async function () {
 				const feeAccount =
 					await emptyMarketplaceData.nftMarketplace.feeAccount();
@@ -86,30 +80,6 @@ describe("NFTMarketplace", function () {
 				const fee = await emptyMarketplaceData.nftMarketplace.fee();
 				expect(fee).to.equal(initialFee);
 			});
-
-			/* it("Should have userFunds set to 0 for the contract owner", async function () {
-				const owner = emptyMarketplaceData.marketPlaceOwner.address;
-				const userFunds =
-					await emptyMarketplaceData.nftMarketplace.userFunds(owner);
-				expect(userFunds).to.equal(0);
-			});
- 
-			it("Should have userFunds set to 0 for the 'other' account", async function () {
-				const userFunds =
-					await emptyMarketplaceData.nftMarketplace.userFunds(
-						emptyMarketplaceData.otherAccount.address
-					);
-				expect(userFunds).to.equal(0);
-			});
-
-			it("The NFT should not be listed for sale", async function () {
-				// TODO implement
-			});
-
-			it("The NFT should not be listed for auction", async function () {
-				// TODO implement
-			});			*/
-
 		});
 	});
 });

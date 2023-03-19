@@ -35,7 +35,6 @@ describe("NFTMarketplace", function () {
 		tokenId: number;
 		seller: SignerWithAddress;
 		price: BigNumber
-
 	};
 
 	// Global Variables
@@ -96,6 +95,7 @@ describe("NFTMarketplace", function () {
 		// Define listing price
 		const listingPrice: BigNumber = ethers.utils.parseEther("1");
 
+
 		// Calculate listing key
 		const approvedListingKey: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
@@ -141,7 +141,7 @@ describe("NFTMarketplace", function () {
 		// Mint an attacker NFT
 		await nftAttacker.safeMint(CAR_1_METADATA_URI, nftLister.address);
 		const attackerTokenId: number = 1;
-    
+
 		const attackerListingKey: BytesLike = ethers.utils.solidityKeccak256(
 			["address", "uint256"],
 			[nftAttacker.address, 1]
@@ -178,7 +178,6 @@ describe("NFTMarketplace", function () {
 				marketplaceDataForListing = await loadFixture(
 					deployNFMarketplaceAndMintTokensFixture
 				);
-
 
 				listing1 = marketplaceDataForListing.approvedListing;
 			});
@@ -416,7 +415,6 @@ describe("NFTMarketplace", function () {
 				// Given the listing was deleted all the attributes should be set to their default value
 				expect(listingPrice).to.equal(ethers.constants.Zero);
 
-
 				// Check that the seller is still the owner of the NFT
 				expect(
 					await marketplaceDataForListing.testCarsNFT.ownerOf(listing1.tokenId)
@@ -555,6 +553,8 @@ describe("NFTMarketplace", function () {
 						)
 				).to.be.revertedWith("Invalid price. Needs to be positive and not exceed Max Int valid value.");
 			});
+
+
 		});
 
 		describe("Purchase NFTs", function () {
@@ -654,6 +654,27 @@ describe("NFTMarketplace", function () {
 							value: listing1.price,
 						})
 				).to.be.revertedWith("NFT owner can't call this function");
+			});
+
+			// Reentrancy attack
+			it("Should revert if value provided for the attack is lower that 2 Eth", async function () {
+				const attackedListing: Listing = marketplaceDataForListing.attackedListing;
+
+			/* 	await marketplaceDataForListing.nftMarketplace
+					.connect(marketplaceDataForListing.nftLister)
+					.createListing(
+						attackedListing.nft.address,
+						attackedListing.tokenId,
+						attackedListing.price
+					); */
+
+				await expect(
+					marketplaceDataForListing.nftAttacker
+						.connect(marketplaceDataForListing.nftBuyer)
+						.attackPurchase(attackedListing.nft.address, attackedListing.tokenId, {
+							value: ethers.utils.parseEther("1.0"),
+						})
+				).to.be.reverted
 			});
 
 			it("Should not allow to reenter the purchase function", async function () {

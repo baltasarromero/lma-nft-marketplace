@@ -120,22 +120,4 @@ interface INFTMarketplace {
 	function updateListingPrice(IERC721 nft, uint256 tokenId, uint256 newPrice) external;
 
 	function purchase(IERC721 nft, uint256 tokenId) external payable;
-
-	// Audits
-	function createAuction(
-		IERC721 nft,
-		uint256 tokenId,
-		uint256 floorPrice,
-		uint256 startTimestamp,
-		uint256 endTimestamp
-	) external;
-
-	function bid(bytes32 auctionKey) external payable;
-
-	function cancelAuction(bytes32 auctionKey) external;
-
-	function endAuction(bytes32 auctionKey) external;
-
-	function withdrawBid(bytes32 auctionKey) external;
-
 }
