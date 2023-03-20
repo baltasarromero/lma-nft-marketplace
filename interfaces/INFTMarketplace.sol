@@ -7,22 +7,6 @@ pragma solidity 0.8.16;
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
 
 interface INFTMarketplace {
-	// Structs
-	struct Auction {
-		IERC721 nft;
-		uint256 tokenId;
-		address payable seller;
-		uint256 floorPrice;
-		uint256 sellPrice;
-		mapping(address => uint256) bids;
-		address highestBidder;
-		uint256 highestBid;
-		bool cancelled;
-		bool ended;
-		uint256 startTimestamp;
-		uint256 endTimestamp;
-	}
-
 	// Events
 	// Listings
 	event ListingCreated(
@@ -39,7 +23,7 @@ interface INFTMarketplace {
 		address indexed seller,
 		address indexed buyer,
 		uint256 price,
-		uint256 endTimestamp
+		uint256 purchaseTimestamp
 	);
 
 	event ListingPriceUpdated(
@@ -55,49 +39,6 @@ interface INFTMarketplace {
 		uint256 tokenId,
 		address indexed seller,
 		uint256 cancelTimestamp
-	);
-
-	// Auctions
-	event AuctionCreated(
-		address indexed nftAddress,
-		uint256 indexed tokenId,
-		address seller,
-		uint256 floorPrice,
-		uint256 startTimestamp,
-		uint256 endTimestamp
-	);
-
-	event NewHighestBid(
-		address indexed nftAddress,
-		uint256 tokenId,
-		address indexed bidder,
-		uint256 bid,
-		uint256 previousHighestBid,
-		uint256 timestamp
-	);
-
-	event AuctionCancelled(
-		address indexed nftAddress,
-		uint256 tokenId,
-		address indexed seller,
-		uint256 cancelTimestamp
-	);
-
-	event AuctionFinished(
-		address indexed nftAddress,
-		uint256 tokenId,
-		uint256 amountId,
-		address indexed seller,
-		address indexed buyer,
-		uint256 endTimestamp
-	);
-
-	event BidWithdrawn(
-		address indexed bidder,
-		address indexed nftAddress,
-		uint256 tokenId,
-		uint256 bid,
-		uint256 timestamp
 	);
 
 	// Management
