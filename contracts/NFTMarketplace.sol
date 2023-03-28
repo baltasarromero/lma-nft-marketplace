@@ -41,7 +41,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 
 	// Fee management
 	address payable public feeAccount;
-	uint public fee;
+	uint256 public fee;
 
 	// Modifiers
 	// Shared
@@ -60,7 +60,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		_;
 	}
 
-	modifier onlyApprovedNFTs(IERC721 nft, uint tokenId) {
+	modifier onlyApprovedNFTs(IERC721 nft, uint256 tokenId) {
 		address tokenOwner = nft.ownerOf(tokenId);
 		require(
 			nft.getApproved(tokenId) == address(this) ||
@@ -71,31 +71,31 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	}
 
 	// Listing
-	modifier notListed(IERC721 nft, uint tokenId) {
+	modifier notListed(IERC721 nft, uint256 tokenId) {
 		// If the NFT is listed the price will be a positive value
 		require(listings[getKey(nft, tokenId)] <= 0, "NFT is already listed");
 		_;
 	}
 
-	modifier listed(IERC721 nft, uint tokenId) {
+	modifier listed(IERC721 nft, uint256 tokenId) {
 		// If the NFT is listed the price will be a positive value
 		require(listings[getKey(nft, tokenId)] > 0, "NFT is not listed");
 		_;
 	}
 
 	// Constructor
-	constructor(address feeDestinationAccount, uint feeAmount) {
+	constructor(address feeDestinationAccount, uint256 feeAmount) {
 		feeAccount = payable(feeDestinationAccount);
 		fee = feeAmount;
 	}
 
 	// Functions
 	// Helpers
-	function getKey(IERC721 nft, uint tokenId) public pure returns (bytes32) {
+	function getKey(IERC721 nft, uint256 tokenId) public pure returns (bytes32) {
 		return keccak256(abi.encodePacked(address(nft), tokenId));
 	}
 
-	function _saveListing(IERC721 nft, uint tokenId, uint256 price) internal {
+	function _saveListing(IERC721 nft, uint256 tokenId, uint256 price) internal {
 		// Increment listings count
 		listingsCount.increment();
 		// Add the new listing to the mapping of listings
@@ -105,8 +105,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	// Listings
 	function createListing(
 		IERC721 nft,
-		uint tokenId,
-		uint price
+		uint256 tokenId,
+		uint256 price
 	)
 		external
 		validPrice(price)
@@ -138,7 +138,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		uint256 newPrice
 	) external validPrice(newPrice) listed(nft, tokenId) onlyNFTOwner(nft, tokenId) {
 		bytes32 listingKey = getKey(nft, tokenId);
-		/// @dev convert to uint for comparison and to pass as parameter to events. Liseting price will be positive because it passed the listed validation
+		/// @dev convert to uint256 for comparison and to pass as parameter to events. Liseting price will be positive because it passed the listed validation
 		uint256 oldPrice = listings[listingKey];
 		// Check if the new price is different from the current price
 		require(newPrice != oldPrice, "New price must be different from current price");
