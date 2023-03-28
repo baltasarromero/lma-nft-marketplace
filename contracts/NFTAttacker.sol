@@ -88,9 +88,4 @@ contract NFTAttacker is ERC721URIStorage, IERC721Receiver {
 		// Send 2 Eth to cover for the NFT price
 		lmaNFTMarketplace.purchase{ value: 2 ether }(nft, tokenId);
 	}
-
-	/// @dev allow contract to receive ether
-	receive() external payable {
-
-    }
 }
