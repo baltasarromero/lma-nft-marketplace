@@ -36,7 +36,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	using Counters for Counters.Counter;
 	// Listing Data
 	Counters.Counter public listingsCount;
-	mapping(bytes32 => int256) public listings;
+	// We only store de price ins the mapping
+	mapping(bytes32 => uint256) public listings;
 
 	// Fee management
 	address payable public feeAccount;
@@ -45,7 +46,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	// Modifiers
 	// Shared
 	modifier validPrice(uint256 price) {
-		require(price > 0 && price <= uint256(type(int256).max), "Invalid price. Needs to be positive and not exceed Max Int valid value.");
+		require(price > 0, "Invalid price. Needs to be above zero.");
 		_;
 	}
 
@@ -98,7 +99,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		// Increment listings count
 		listingsCount.increment();
 		// Add the new listing to the mapping of listings
-		listings[getKey(nft, tokenId)] = int256(price);
+		listings[getKey(nft, tokenId)] = price;
 	}
 
 	// Listings
@@ -138,17 +139,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	) external validPrice(newPrice) listed(nft, tokenId) onlyNFTOwner(nft, tokenId) {
 		bytes32 listingKey = getKey(nft, tokenId);
 		/// @dev convert to uint for comparison and to pass as parameter to events. Liseting price will be positive because it passed the listed validation
-		uint256 oldPrice = uint256(listings[listingKey]);
+		uint256 oldPrice = listings[listingKey];
 		// Check if the new price is different from the current price
 		require(newPrice != oldPrice, "New price must be different from current price");
 
 		// Update the listing price
-		// TODO validate that there's not an overflow
-
-		listings[listingKey] = int256(newPrice);
+		listings[listingKey] = newPrice;
 
 		// Emit listing price updated event
-		emit ListingPriceUpdated(address(nft), tokenId, uint256(oldPrice), newPrice, block.timestamp);
+		emit ListingPriceUpdated(address(nft), tokenId, oldPrice, newPrice, block.timestamp);
 	}
 
 	function purchase(
@@ -156,13 +155,13 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		uint256 tokenId
 	) external payable nonReentrant listed(nft, tokenId) notNFTOwner(nft, tokenId) {
 		bytes32 listingKey = getKey(nft, tokenId);
-		int256 listingPrice = listings[listingKey];
+		uint256 listingPrice = listings[listingKey];
 		
 		/// @dev Ensure that the user has sent enough ether to purchase the NFT. ListingPrice is a positive value because it's validated by listed modifier 
 		require(msg.value >= uint256(listingPrice), "Insufficient funds to purchase NFT");
 
-		/// @dev Save negative price to have a quick reference to the previous sale price
-		listings[listingKey] = listingPrice * -1;
+		/// @dev Delete the listing
+		delete listings[listingKey];
 		listingsCount.decrement();
 
 		address nftSeller = nft.ownerOf(tokenId);
@@ -173,6 +172,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 		payable(nftSeller).transfer(uint256(listingPrice));
 
 		// Emit an event to indicate that the purchase has happened
-		emit Purchase(address(nft), tokenId, nftSeller, msg.sender, uint256(listingPrice), block.timestamp);
+		emit Purchase(address(nft), tokenId, nftSeller, msg.sender, listingPrice, block.timestamp);
 	}
 }

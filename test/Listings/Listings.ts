@@ -263,20 +263,7 @@ describe("NFTMarketplace", function () {
 							listing1.tokenId,
 							ethers.constants.Zero
 						)
-				).to.be.revertedWith("Invalid price. Needs to be positive and not exceed Max Int valid value.");
-			});
-
-			
-			it("Should not create a new listing if price is higher than max int256 value", async function () {
-				await expect(
-					marketplaceDataForListing.nftMarketplace
-						.connect(listing1.seller)
-						.createListing(
-							listing1.nft.address,
-							listing1.tokenId,
-							ethers.constants.MaxInt256.add(1)
-						)
-				).to.be.revertedWith("Invalid price. Needs to be positive and not exceed Max Int valid value.");
+				).to.be.revertedWith("Invalid price. Needs to be above zero.");
 			});
 
 			it("Should not create a new listing if the caller is not the owner of the NFT", async function () {
@@ -539,22 +526,8 @@ describe("NFTMarketplace", function () {
 							listing1.tokenId,
 							ethers.constants.Zero
 						)
-				).to.be.revertedWith("Invalid price. Needs to be positive and not exceed Max Int valid value.");
+				).to.be.revertedWith("Invalid price. Needs to be above zero.");
 			});
-
-			it("Should revert if the new price is higher than max int256 value", async function () {
-				await expect(
-					marketplaceDataForListing.nftMarketplace
-						.connect(listing1.seller)
-						.updateListingPrice(
-							listing1.nft.address,
-							listing1.tokenId,
-							ethers.constants.MaxInt256.add(1)
-						)
-				).to.be.revertedWith("Invalid price. Needs to be positive and not exceed Max Int valid value.");
-			});
-
-
 		});
 
 		describe("Purchase NFTs", function () {
@@ -606,8 +579,8 @@ describe("NFTMarketplace", function () {
 					listing1.listingKey
 				);
 
-				// Check that the price is now the negative of the listingPrice
-				expect(updatedListingPrice).to.equal(listing1.price.mul(-1));
+				// Check that the price is now zero
+				expect(updatedListingPrice).to.equal(ethers.constants.Zero);
 
 				// Check that the NFT was transferred
 				expect(await listing1.nft.ownerOf(listing1.tokenId)).to.equal(
@@ -659,15 +632,7 @@ describe("NFTMarketplace", function () {
 			// Reentrancy attack
 			it("Should revert if value provided for the attack is lower that 2 Eth", async function () {
 				const attackedListing: Listing = marketplaceDataForListing.attackedListing;
-
-			/* 	await marketplaceDataForListing.nftMarketplace
-					.connect(marketplaceDataForListing.nftLister)
-					.createListing(
-						attackedListing.nft.address,
-						attackedListing.tokenId,
-						attackedListing.price
-					); */
-
+				
 				await expect(
 					marketplaceDataForListing.nftAttacker
 						.connect(marketplaceDataForListing.nftBuyer)
