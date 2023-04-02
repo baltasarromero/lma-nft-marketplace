@@ -61,21 +61,22 @@ subtask("print", "Prints a message")
 
 task("deploy-nft-marketplace", "Deploys NFTMarketplace with pk passed as parameter")
 	.addParam("privateKey", "Please provide the private key")
-	.addParam("feeDestinationAccount", "Please provide the fee destination account")
-	.addParam("feeAmount", "Please provide the fee amount")
-	.setAction(async ({ privateKey, feeDestinationAccount, feeAmount }) => {
-		const { main } = await lazyImport(
-			"./scripts/deploy-nft-marketplace"
-		);
-		await main(privateKey, feeDestinationAccount, feeAmount);
+	.setAction(async ({ privateKey }) => {
+		const { main } = await lazyImport("./scripts/deploy-nft-marketplace");
+		await main(privateKey);
 	});
 
 task("deploy-nft-test-cars", "Deploys TestCarsNFT with pk passed as parameter")
 	.addParam("privateKey", "Please provide the private key")
 	.setAction(async ({ privateKey }) => {
-		const { main } = await lazyImport(
-			"./scripts/deploy-nft-test-cars"
-		);
+		const { main } = await lazyImport("./scripts/deploy-nft-test-cars");
+		await main(privateKey);
+	});
+
+task("deploy-my-nft-with-permit", "Deploys MyNFTWithPermit with pk passed as parameter")
+	.addParam("privateKey", "Please provide the private key")
+	.setAction(async ({ privateKey }) => {
+		const { main } = await lazyImport("./scripts/deploy-my-nft-with-permit");
 		await main(privateKey);
 	});
 

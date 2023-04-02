@@ -49,10 +49,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	/// @dev Each buyer can only create one offer at a time for a given nft
 	mapping(bytes32 => mapping(address => uint256)) public nftOffers;	
 
-	// Fee management
-	address payable public feeAccount;
-	uint256 public fee;
-
 	// Modifiers
 	// Shared
 	modifier validPrice(uint256 price) {
@@ -99,10 +95,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	}
 
 	// Constructor
-	constructor(address feeDestinationAccount, uint256 feeAmount) {
-		feeAccount = payable(feeDestinationAccount);
-		fee = feeAmount;
-	}
+	constructor() {}
 
 	// Functions
 	// Helpers
@@ -186,14 +179,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 	}
 
 	function createNFTOffer(IERC721 nft, uint256 tokenId) external payable notNFTOwner(nft, tokenId) notListed(nft, tokenId) {
-		/// @dev If there's an outstanding offer the value sent wil be added to the existent offer. If there's no previous offer we just set the value sent
-		uint256 offerValue = nftOffers[getKey(nft, tokenId)][msg.sender] + msg.value;
+		/// @dev revert if the user already made an offer. If the user wants to modify offer price will have to cancel and create a new offer
+		/// this is done to avoid created a new event to notify for updated offers
+		require(nftOffers[getKey(nft, tokenId)][msg.sender] == 0, "You have already made an offer");
 		
 		// Save the offer
-		nftOffers[getKey(nft, tokenId)][msg.sender] = offerValue;
+		nftOffers[getKey(nft, tokenId)][msg.sender] = msg.value;
 
 		/// @dev emit a new offer event even if the offer is updated. The new event will reflect the new offer value
-		emit NewNFTOffer(address(nft), tokenId, nft.ownerOf(tokenId), msg.sender, offerValue, block.timestamp);
+		emit NewNFTOffer(address(nft), tokenId, nft.ownerOf(tokenId), msg.sender, msg.value, block.timestamp);
 	}
 
 	function cancelNFTOffer(IERC721 nft, uint256 tokenId) external nonReentrant {
@@ -210,6 +204,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
 
 	function acceptNFTOffer(IERC721 nft, uint256 tokenId, address buyer) external nonReentrant onlyNFTOwner(nft, tokenId) {
 		uint256 offeredPrice = _deleteNFTOffer(nft, tokenId, buyer);
+
+		require(offeredPrice > 0, "Offer does not exist");
+
 		// Transfer the NFT ownership to the buyer
 		nft.safeTransferFrom(msg.sender, buyer, tokenId);
 

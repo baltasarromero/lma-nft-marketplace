@@ -9,9 +9,7 @@ import {
 	AcceptNFTOfferAttacker__factory,
 	AcceptNFTOfferAttacker,
 	AcceptNFTOfferWithPermitAttacker,
-	AcceptNFTOfferWithPermitAttacker__factory,
-	CancelNFTOfferAttacker,
-	CancelNFTOfferAttacker__factory
+	AcceptNFTOfferWithPermitAttacker__factory
 } from "../../typechain-types";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { BytesLike } from "@ethersproject/bytes";
@@ -85,7 +83,6 @@ describe("NFTMarketplace", function () {
 		tokenId: BigNumber;
 		acceptNFTOfferAttacker: AcceptNFTOfferAttacker;
 		acceptNFTOfferWithPermitAttacker: AcceptNFTOfferWithPermitAttacker;
-		cancelNFTOfferAttacker: CancelNFTOfferAttacker;
 	};
 
 	// Global Variables
@@ -99,10 +96,7 @@ describe("NFTMarketplace", function () {
 		const NFTMarketplace: NFTMarketplace__factory = await ethers.getContractFactory(
 			"NFTMarketplace"
 		);
-		const nftMarketplace: NFTMarketplace = await NFTMarketplace.deploy(
-			feeDestinationAccount.address,
-			100000000
-		);
+		const nftMarketplace: NFTMarketplace = await NFTMarketplace.deploy();
 
 		const MyNFTWithPermit: MyNFTWithPermit__factory = await ethers.getContractFactory(
 			"MyNFTWithPermit"
@@ -126,12 +120,6 @@ describe("NFTMarketplace", function () {
 			nftMarketplace.address
 		);
 
-		// Deploy contract to attack CancelNFTOffer
-		const CancelNFTOfferAttacker: CancelNFTOfferAttacker__factory = await ethers.getContractFactory("CancelNFTOfferAttacker");
-		const cancelNFTOfferAttacker: CancelNFTOfferAttacker = await CancelNFTOfferAttacker.deploy(
-			nftMarketplace.address
-		);
-
 		return {
 			nftMarketplace,
 			marketPlaceOwner,
@@ -142,7 +130,6 @@ describe("NFTMarketplace", function () {
 			tokenId,
 			acceptNFTOfferAttacker,
 			acceptNFTOfferWithPermitAttacker,
-			cancelNFTOfferAttacker,
 		};
 	}
 
@@ -309,44 +296,6 @@ describe("NFTMarketplace", function () {
 						)
 				).to.be.revertedWith("Offer does not exist");
 			});
-
-			/* it("Should not allow to reenter cancelNFTOffer function", async function () {
-				await hre.network.provider.request({
-					method: "hardhat_impersonateAccount",
-					params: [marketplaceDataForOffers.acceptNFTOfferAttacker.address],
-				});
-
-				const nftCancelAttackerSigner = await ethers.getSigner(
-					marketplaceDataForOffers.acceptNFTOfferAttacker.address
-				);
-
-				// Send funds to the attacker contract so it can call functions
-				await marketplaceDataForOffers.nftSeller.sendTransaction({
-					to: marketplaceDataForOffers.acceptNFTOfferAttacker.address,
-					value: ethers.utils.parseEther("10.0"),
-				});
-
-				// Create an offer for the NFT
-				await marketplaceDataForOffers.nftMarketplace
-					.connect(nftCancelAttackerSigner)
-					.createNFTOffer(
-						marketplaceDataForOffers.myNFTWithPermit.address,
-						marketplaceDataForOffers.tokenId,
-						{
-							value: offeredPrice,
-						}
-					);
-
-				// The attacker cancels the offer and that should trigger the reentrancy after the eth is sent back to the attacker
-				await expect(
-					marketplaceDataForOffers.nftMarketplace
-						.connect(nftCancelAttackerSigner)
-						.cancelNFTOffer(
-							marketplaceDataForOffers.myNFTWithPermit.address,
-							marketplaceDataForOffers.tokenId
-						)
-				).to.be.revertedWith("ReentrancyGuard: reentrant call");
-			}); */
 		});
 
 		describe("Accept NFT  Offers with previous approval", function () {

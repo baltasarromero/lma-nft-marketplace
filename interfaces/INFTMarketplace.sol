@@ -79,13 +79,6 @@ interface INFTMarketplace {
 		uint256 offerAcceptedTimestamp
 	);
 
-	// Management
-	event FundsClaimed(address indexed user, uint256 amount, uint256 timestamp);
-
-	event FeeAccountUpdated(address previousFeeAccount, address newfeeAcount);
-
-	event FeeAmountUpdated(uint256 previousFeeAmount, uint256 newFeeAmount);
-
 	// Functions definitions
 	// Listings
 	function createListing(IERC721 nft, uint256 tokenId, uint256 price) external;

@@ -56,10 +56,7 @@ describe("NFTMarketplace", function () {
 		const NFTMarketplace: NFTMarketplace__factory = await ethers.getContractFactory(
 			"NFTMarketplace"
 		);
-		const nftMarketplace: NFTMarketplace = await NFTMarketplace.deploy(
-			feeDestinationAccount.address,
-			initialFee
-		);
+		const nftMarketplace: NFTMarketplace = await NFTMarketplace.deploy();
 
 		const TestCarsNFT: TestCarsNFT__factory = await ethers.getContractFactory("TestCarsNFT");
 		const testCarsNFT: TestCarsNFT = await TestCarsNFT.deploy();
