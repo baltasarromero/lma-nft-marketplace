@@ -236,7 +236,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC721Holder, INFTMarketpla
     ) public virtual nonReentrant onlyNFTWithPermitsOwner(nft, tokenId) {
         require(receiver != address(0), "Receiver can't be Zero address");
 
-		(uint256 offeredPrice) = _deleteNFTOffer(nft,tokenId, receiver);
+		uint256 offeredPrice = _deleteNFTOffer(nft,tokenId, receiver);
+
+		require(offeredPrice > 0, "Offer does not exist");
 
 		_transferNFTWithPermit(nft, tokenId, deadline, receiver, signature);
 

@@ -226,6 +226,32 @@ describe("NFTMarketplace", function () {
 						)
 				).to.be.revertedWith("NFT is already listed");
 			});
+
+			it("Should revert if the caller has an outstanding offer for the given NFT", async function () {
+				// Create first offer
+				await marketplaceDataForOffers.nftMarketplace
+						.connect(marketplaceDataForOffers.nftBuyer)
+						.createNFTOffer(
+							marketplaceDataForOffers.myNFTWithPermit.address,
+							marketplaceDataForOffers.tokenId,
+							{
+								value: offeredPrice,
+							}
+						);
+
+				// Try to call createNFTOffer function again		
+				await expect(
+					marketplaceDataForOffers.nftMarketplace
+						.connect(marketplaceDataForOffers.nftBuyer)
+						.createNFTOffer(
+							marketplaceDataForOffers.myNFTWithPermit.address,
+							marketplaceDataForOffers.tokenId,
+							{
+								value: offeredPrice,
+							}
+						)
+				).to.be.revertedWith("You have already made an offer");
+			});
 		});
 
 		describe("Cancel NFT  Offers", function () {
@@ -412,10 +438,7 @@ describe("NFTMarketplace", function () {
 						marketplaceDataForOffers.tokenId
 					);
 
-				// Get timestamp before accepting the offer
-				const blockTimestamp: number = (await ethers.provider.getBlock("latest")).timestamp;
-
-				// Expect acceptNFTOffer to emit an event
+				// Expect acceptNFTOffer to revert
 				await expect(
 					marketplaceDataForOffers.nftMarketplace
 						.connect(marketplaceDataForOffers.marketPlaceOwner)
@@ -425,6 +448,27 @@ describe("NFTMarketplace", function () {
 							marketplaceDataForOffers.nftBuyer.address
 						)
 				).to.be.revertedWith("Not the NFT owner");
+			});
+
+			it("Should revert if the offer doesn't exist", async function () {
+				// Approve the MarketPlace for token 1 so it can transfer the NFT to the buyer
+				await marketplaceDataForOffers.myNFTWithPermit
+					.connect(marketplaceDataForOffers.nftSeller)
+					.approve(
+						marketplaceDataForOffers.nftMarketplace.address,
+						marketplaceDataForOffers.tokenId
+					);
+
+				// Expect acceptNFTOffer to revert
+				await expect(
+					marketplaceDataForOffers.nftMarketplace
+						.connect(marketplaceDataForOffers.nftSeller)
+						.acceptNFTOffer(
+							marketplaceDataForOffers.myNFTWithPermit.address,
+							marketplaceDataForOffers.tokenId,
+							marketplaceDataForOffers.marketPlaceOwner.address
+						)
+				).to.be.revertedWith("Offer does not exist");
 			});
 
 			it("Should revert when trying to reenter the AcceptNFTOffer function", async function () {
@@ -624,6 +668,33 @@ describe("NFTMarketplace", function () {
 							signature
 						)
 				).to.be.revertedWith("Receiver can't be Zero address");
+			});
+
+			it("Should revert if the offer does not exist", async function () {
+				// Sign Permit
+				const signature = await sign(
+					marketplaceDataForOffers.myNFTWithPermit,
+					marketplaceDataForOffers.nftSeller,
+					await marketplaceDataForOffers.nftMarketplace.address,
+					marketplaceDataForOffers.tokenId,
+					await marketplaceDataForOffers.myNFTWithPermit.nonces(
+						marketplaceDataForOffers.tokenId
+					),
+					deadline
+				);
+
+				// Expect transfer with permit to emit an event
+				await expect(
+					marketplaceDataForOffers.nftMarketplace
+						.connect(marketplaceDataForOffers.nftSeller) 
+						.acceptNFTOfferWithPermit(
+							marketplaceDataForOffers.myNFTWithPermit.address,
+							marketplaceDataForOffers.tokenId,
+							marketplaceDataForOffers.marketPlaceOwner.address, // MarketplaceOwner didn't create an offer
+							deadline,
+							signature
+						)
+				).to.be.revertedWith("Offer does not exist");
 			});
 
 			it("Should revert when trying to reenter the AcceptNFTOfferWithPermit function", async function () {
